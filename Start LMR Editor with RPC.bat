@@ -22,9 +22,8 @@ if not exist "%RPC_SCRIPT%" (
 cd /d "%RPC_DIR%"
 python -c "import pypresence" >nul 2>&1
 if errorlevel 1 (
-  echo Installing pypresence...
-  python -m pip install pypresence
+  py -3 -m pip install pypresence
 )
 
 start "LMR Editor" /D "%ROOT%" "%EDITOR_EXE%"
-start "LMR RPC" python "%RPC_SCRIPT%"
+start "LMR RPC" "%RPC_DIR%\run_rpc.bat"
