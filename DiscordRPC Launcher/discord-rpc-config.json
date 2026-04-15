@@ -1,0 +1,17 @@
+{
+  "DiscordApplicationId": "PUT_YOUR_DISCORD_APP_ID_HERE",
+  "TargetProcessName": "LMR Scenario Editor",
+  "TargetExePath": ".\\LMR Scenario Editor.exe",
+  "AutoLaunchEditor": false,
+  "AutoExitWhenEditorClosed": true,
+  "LoopDelayMs": 2000,
+  "Details": "Editing scenarios",
+  "State": "LMR Scenario Editor",
+  "LargeImageKey": "app",
+  "LargeImageText": "LMR Scenario Editor",
+  "SmallImageKey": "",
+  "SmallImageText": "",
+  "PartyId": "",
+  "PartySize": 0,
+  "PartyMax": 0
+}
