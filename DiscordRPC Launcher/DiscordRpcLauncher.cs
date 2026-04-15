@@ -49,10 +49,15 @@ namespace LmrDiscordRpcLauncher
     internal static class Program
     {
         private const string ConfigFileName = "discord-rpc-config.json";
+        private const string LogFileName = "rpc.log";
+        private static string _logPath;
 
         private static int Main()
         {
+            try
+            {
             var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            _logPath = Path.Combine(baseDir, LogFileName);
             var configPath = Path.Combine(baseDir, ConfigFileName);
             var config = LoadOrCreateConfig(configPath);
 
@@ -71,13 +76,10 @@ namespace LmrDiscordRpcLauncher
             using (var rpc = new DiscordRpcClient(config.DiscordApplicationId))
             {
                 rpc.Logger = null;
-                if (!rpc.Initialize())
-                {
-                    Console.WriteLine("Discord RPC init failed. Is Discord running?");
-                    return 2;
-                }
+                WaitForInitializeRpc(rpc, config);
 
                 Console.WriteLine("Discord RPC started. Monitoring editor process...");
+                Log("Discord RPC started. Monitoring editor process...");
                 var presenceSet = false;
 
                 while (true)
@@ -86,15 +88,26 @@ namespace LmrDiscordRpcLauncher
 
                     if (editorRunning && !presenceSet)
                     {
-                        rpc.SetPresence(BuildPresence(config, startedAt));
-                        presenceSet = true;
-                        Console.WriteLine("Presence enabled.");
+                        try
+                        {
+                            rpc.SetPresence(BuildPresence(config, startedAt));
+                            presenceSet = true;
+                            Console.WriteLine("Presence enabled.");
+                            Log("Presence enabled.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("SetPresence failed: " + ex.Message);
+                            Log("SetPresence failed: " + ex);
+                            WaitForInitializeRpc(rpc, config);
+                        }
                     }
                     else if (!editorRunning && presenceSet)
                     {
                         rpc.ClearPresence();
                         presenceSet = false;
                         Console.WriteLine("Presence cleared (editor closed).");
+                        Log("Presence cleared (editor closed).");
 
                         if (config.AutoExitWhenEditorClosed)
                         {
@@ -102,7 +115,16 @@ namespace LmrDiscordRpcLauncher
                         }
                     }
 
-                    rpc.Invoke();
+                    try
+                    {
+                        rpc.Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("RPC invoke error: " + ex.Message);
+                        Log("RPC invoke error: " + ex);
+                        WaitForInitializeRpc(rpc, config);
+                    }
                     Thread.Sleep(Math.Max(500, config.LoopDelayMs));
                 }
 
@@ -111,7 +133,49 @@ namespace LmrDiscordRpcLauncher
             }
 
             Console.WriteLine("RPC launcher stopped.");
+            Log("RPC launcher stopped.");
             return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fatal RPC launcher error: " + ex.Message);
+                Log("Fatal RPC launcher error: " + ex);
+                return 10;
+            }
+        }
+
+        private static void WaitForInitializeRpc(DiscordRpcClient rpc, RpcConfig config)
+        {
+            var attempt = 0;
+            while (true)
+            {
+                attempt++;
+                try
+                {
+                    if (rpc.Initialize())
+                    {
+                        if (attempt > 1)
+                        {
+                            Log("Discord RPC connected on attempt " + attempt + ".");
+                        }
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Discord RPC init attempt " + attempt + " failed: " + ex.Message);
+                    Log("Discord RPC init attempt " + attempt + " failed: " + ex);
+                }
+
+                if (config.AutoExitWhenEditorClosed && !IsEditorRunning(config.TargetProcessName))
+                {
+                    Log("Stopping init retries: editor is not running.");
+                    return;
+                }
+
+                Console.WriteLine("Waiting for Discord... (attempt " + attempt + ")");
+                Thread.Sleep(2000);
+            }
         }
 
         private static RichPresence BuildPresence(RpcConfig config, DateTime startedAt)
@@ -208,6 +272,22 @@ namespace LmrDiscordRpcLauncher
             catch
             {
                 return new RpcConfig();
+            }
+        }
+
+        private static void Log(string message)
+        {
+            try
+            {
+                var line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " | " + message;
+                Console.WriteLine(line);
+                if (!string.IsNullOrWhiteSpace(_logPath))
+                {
+                    File.AppendAllText(_logPath, line + Environment.NewLine);
+                }
+            }
+            catch
+            {
             }
         }
     }
