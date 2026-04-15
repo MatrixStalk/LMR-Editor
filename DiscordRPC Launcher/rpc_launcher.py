@@ -1,7 +1,6 @@
 ﻿import csv
 import io
 import json
-import locale
 import os
 import subprocess
 import sys
@@ -32,18 +31,50 @@ def load_config():
         return json.load(f)
 
 
+def decode_tasklist_output(raw: bytes) -> str:
+    for enc in ("utf-8", "cp866", "cp1251", "mbcs"):
+        try:
+            txt = raw.decode(enc)
+            if "Image Name" in txt or "Имя образа" in txt:
+                return txt
+        except Exception:
+            continue
+    return raw.decode("utf-8", errors="ignore")
+
+
+def _text_score(s: str) -> int:
+    cyr = sum(1 for ch in s if "А" <= ch <= "я" or ch in "Ёё")
+    bad = sum(1 for ch in s if ch in "ÐÑÂÃ�")
+    return cyr * 3 - bad
+
+
+def repair_mojibake(text: str) -> str:
+    candidates = [text]
+    transforms = [
+        ("latin1", "utf-8"),
+        ("cp1251", "utf-8"),
+        ("cp1252", "utf-8"),
+        ("cp866", "utf-8"),
+        ("latin1", "cp1251"),
+        ("cp1252", "cp1251"),
+        ("cp866", "cp1251"),
+        ("cp1251", "cp866"),
+    ]
+    for src, dst in transforms:
+        try:
+            candidates.append(text.encode(src).decode(dst))
+        except Exception:
+            pass
+    return max(candidates, key=_text_score)
+
+
 def get_tasklist_rows(process_name: str, verbose: bool):
     args = ["tasklist", "/FI", f"IMAGENAME eq {process_name}.exe", "/FO", "CSV"]
     if verbose:
         args.insert(1, "/V")
     try:
-        out = subprocess.check_output(
-            args,
-            creationflags=0x08000000,
-            text=True,
-            encoding=locale.getpreferredencoding(False),
-            errors="ignore",
-        )
+        raw = subprocess.check_output(args, creationflags=0x08000000)
+        out = decode_tasklist_output(raw)
         reader = csv.reader(io.StringIO(out))
         rows = list(reader)
         if len(rows) <= 1:
@@ -68,7 +99,7 @@ def is_editor_running(process_name: str) -> bool:
 def extract_project_name(process_name: str):
     rows = get_tasklist_rows(process_name, verbose=True)
     for row in rows:
-        title = (row[8] if len(row) > 8 else "").strip()
+        title = repair_mojibake((row[8] if len(row) > 8 else "").strip())
         normalized = title.lower().replace(" ", "")
         if not title or normalized in {"n/a", "н/д"}:
             continue
@@ -94,6 +125,12 @@ def launch_editor(path: str):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     log("RPC launcher starting...")
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 

@@ -1,5 +1,6 @@
 @echo off
 setlocal
+chcp 65001 >nul
 
 set ROOT=D:\Games\S.T.A.L.K.E.R\STSoC\LMR-Editor
 set EDITOR_EXE=%ROOT%\LMR Scenario Editor.exe
