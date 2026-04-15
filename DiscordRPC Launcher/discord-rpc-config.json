@@ -5,6 +5,8 @@
   "AutoLaunchEditor": false,
   "AutoExitWhenEditorClosed": true,
   "LoopDelayMs": 2000,
+  "EnableTabFileTracking": true,
+  "TabProbeIntervalMs": 2500,
   "Details": "Editing scenarios",
   "State": "LMR Scenario Editor",
   "LargeImageKey": "main_image",

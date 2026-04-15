@@ -9,6 +9,14 @@ import time
 from datetime import datetime
 
 from pypresence import Presence
+_TAB_TRACKING_IMPORT_ERROR = None
+try:
+    import psutil
+    from pywinauto import Desktop
+except Exception as _ex:
+    psutil = None
+    Desktop = None
+    _TAB_TRACKING_IMPORT_ERROR = str(_ex)
 
 CONFIG_NAME = "discord-rpc-config.json"
 LOG_NAME = "rpc-python.log"
@@ -153,6 +161,99 @@ def extract_file_name_from_title(title: str):
     return None
 
 
+def detect_file_name_from_tab_cautious(process_name: str):
+    if Desktop is None or psutil is None:
+        return None
+    try:
+        pids = []
+        for p in psutil.process_iter(["pid", "name"]):
+            name = (p.info.get("name") or "").lower()
+            if name == f"{process_name}.exe".lower():
+                pids.append(p.info["pid"])
+        if not pids:
+            return None
+
+        # Keep it intentionally lightweight: only top-level windows and direct tab children.
+        for pid in pids:
+            for w in Desktop(backend="uia").windows(process=pid):
+                try:
+                    tab = w.child_window(auto_id="MainTabControl", control_type="Tab")
+                    if not tab.exists(timeout=0):
+                        continue
+                    tabw = tab.wrapper_object()
+                    items = tabw.children(control_type="TabItem")
+
+                    for item in items:
+                        try:
+                            name = normalize_file_candidate(item.window_text() or "")
+                            if not name:
+                                continue
+                            selected = False
+                            try:
+                                selected = bool(item.iface_selection_item.CurrentIsSelected)
+                            except Exception:
+                                selected = False
+                            if selected:
+                                return name
+                        except Exception:
+                            continue
+
+                    for item in items:
+                        try:
+                            name = normalize_file_candidate(item.window_text() or "")
+                            if name:
+                                return name
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
+    except Exception:
+        return None
+    return None
+
+
+def detect_file_name_from_open_handles(process_name: str):
+    if psutil is None:
+        return None
+    try:
+        pids = []
+        for p in psutil.process_iter(["pid", "name"]):
+            name = (p.info.get("name") or "").lower()
+            if name == f"{process_name}.exe".lower():
+                pids.append(p.info["pid"])
+        if not pids:
+            return None
+
+        candidates = []
+        for pid in pids:
+            try:
+                proc = psutil.Process(pid)
+                for f in proc.open_files():
+                    path = f.path or ""
+                    name = normalize_file_candidate(os.path.basename(path))
+                    if not name:
+                        continue
+                    low = path.lower()
+                    # Prefer likely user/project files over binaries/resources.
+                    score = 0
+                    if "\\library\\" in low or "\\win64-" in low:
+                        score -= 200
+                    if low.endswith((".yaml", ".yml", ".json", ".txt", ".xml", ".rpy", ".lua", ".script", ".ltx")):
+                        score += 200
+                    if "\\temp\\" in low or "\\windows\\" in low:
+                        score -= 80
+                    score += len(path) // 8
+                    candidates.append((score, name, path))
+            except Exception:
+                continue
+        if candidates:
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
+    except Exception:
+        return None
+    return None
+
+
 def launch_editor(path: str):
     if os.path.exists(path):
         subprocess.Popen([path], creationflags=0x00000008)
@@ -168,7 +269,7 @@ def main():
         except Exception:
             pass
 
-    log("RPC launcher starting (safe mode)...")
+    log("RPC launcher starting...")
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     cfg = load_config()
@@ -182,6 +283,8 @@ def main():
     auto_launch = bool(cfg.get("AutoLaunchEditor", False))
     auto_exit = bool(cfg.get("AutoExitWhenEditorClosed", True))
     delay = max(1.0, float(cfg.get("LoopDelayMs", 2000)) / 1000.0)
+    enable_tab_file_tracking = bool(cfg.get("EnableTabFileTracking", True))
+    tab_probe_interval = max(1.5, float(cfg.get("TabProbeIntervalMs", 2500)) / 1000.0)
 
     fallback_details = cfg.get("Details", "Editing scenarios")
     fallback_state = cfg.get("State", "LMR Scenario Editor")
@@ -194,6 +297,9 @@ def main():
         exe_path = os.path.abspath(exe_path)
     if auto_launch:
         launch_editor(exe_path)
+    if enable_tab_file_tracking and _TAB_TRACKING_IMPORT_ERROR:
+        log(f"Tab tracking disabled (imports failed): {_TAB_TRACKING_IMPORT_ERROR}")
+        enable_tab_file_tracking = False
 
     start_ts = int(time.time())
     rpc = Presence(app_id)
@@ -217,6 +323,8 @@ def main():
     last_update = 0.0
     last_project_name = ""
     last_file_name = ""
+    last_tab_probe = 0.0
+    last_tab_file = ""
 
     while True:
         editor_running = is_editor_running(process_name)
@@ -225,11 +333,29 @@ def main():
             title = get_editor_window_title(process_name)
             detected_project = extract_project_name_from_title(title)
             detected_file = extract_file_name_from_title(title)
+            detected_file_source = "title" if detected_file else "none"
+
+            now = time.time()
+            if not detected_file:
+                handle_file = detect_file_name_from_open_handles(process_name)
+                if handle_file:
+                    detected_file = handle_file
+                    detected_file_source = "open_files"
+
+            if not detected_file and enable_tab_file_tracking and (now - last_tab_probe >= tab_probe_interval):
+                last_tab_probe = now
+                tab_file = detect_file_name_from_tab_cautious(process_name)
+                if tab_file:
+                    last_tab_file = tab_file
+                    detected_file = tab_file
+                    detected_file_source = "tab"
+            elif not detected_file and last_tab_file:
+                detected_file = last_tab_file
+                detected_file_source = "tab-cached"
 
             project_name = detected_project or last_project_name or fallback_details
             file_name = detected_file or last_file_name or fallback_state
 
-            now = time.time()
             changed = (project_name != last_project_name) or (file_name != last_file_name)
             should_refresh = (not presence_sent) or (now - last_update >= 15) or changed
 
@@ -250,7 +376,7 @@ def main():
                     if project_name != last_project_name:
                         log(f"Project name updated: {project_name}")
                     if file_name != last_file_name:
-                        src = "title" if detected_file else ("cached" if last_file_name else "fallback")
+                        src = detected_file_source if detected_file else ("cached" if last_file_name else "fallback")
                         log(f"File name updated: {file_name} (source={src})")
                     presence_sent = True
                     last_project_name = project_name
