@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -11,6 +12,7 @@ from pypresence import Presence
 
 CONFIG_NAME = "discord-rpc-config.json"
 LOG_NAME = "rpc-python.log"
+FILE_RE = re.compile(r'([^\s\\/:*?"<>|]+\.[A-Za-z0-9]{1,10})')
 
 
 def log(msg: str):
@@ -96,8 +98,10 @@ def is_editor_running(process_name: str) -> bool:
     return len(get_tasklist_rows(process_name, verbose=False)) > 0
 
 
-def extract_project_name(process_name: str):
+def get_editor_window_title(process_name: str):
     rows = get_tasklist_rows(process_name, verbose=True)
+    best_title = None
+    best_score = -10**9
     for row in rows:
         title = repair_mojibake((row[8] if len(row) > 8 else "").strip())
         normalized = title.lower().replace(" ", "")
@@ -105,15 +109,42 @@ def extract_project_name(process_name: str):
             continue
         if "/" in title and len(title) <= 8:
             continue
-        if " - " in title:
-            name = title.split(" - ", 1)[1].strip()
-        elif "-" in title:
-            name = title.split("-", 1)[1].strip()
-        else:
-            continue
-        if name:
-            return name
+        parts = [p.strip() for p in title.split(" - ") if p.strip()]
+        score = len(parts) * 100 + len(title)
+        if FILE_RE.search(title):
+            score += 250
+        if score > best_score:
+            best_score = score
+            best_title = title
+    return best_title
+
+
+def extract_project_name_from_title(title: str):
+    if not title:
+        return None
+    if " - " in title:
+        parts = [p.strip() for p in title.split(" - ") if p.strip()]
+        if len(parts) >= 2:
+            return parts[1]
+        return title.split(" - ", 1)[1].strip() or None
+    if "-" in title:
+        return title.split("-", 1)[1].strip() or None
     return None
+
+
+def extract_file_name_from_title(title: str, fallback_state: str):
+    if not title:
+        return fallback_state
+    if " - " in title:
+        parts = [p.strip() for p in title.split(" - ") if p.strip()]
+        if len(parts) >= 3:
+            candidate = os.path.basename(parts[-1].strip("\" "))
+            if candidate:
+                return candidate
+    m = FILE_RE.search(title)
+    if m:
+        return os.path.basename(m.group(1))
+    return fallback_state
 
 
 def launch_editor(path: str):
@@ -147,7 +178,7 @@ def main():
     delay = max(0.5, float(cfg.get("LoopDelayMs", 2000)) / 1000.0)
 
     fallback_details = cfg.get("Details", "Editing scenarios")
-    state = cfg.get("State", "LMR Scenario Editor")
+    fallback_state = cfg.get("State", "LMR Scenario Editor")
     large_image = cfg.get("LargeImageKey", "main_image")
     large_text = cfg.get("LargeImageText", "LMR Scenario Editor")
     small_image = cfg.get("SmallImageKey", "") or None
@@ -181,21 +212,25 @@ def main():
     presence_sent = False
     last_update = 0.0
     last_project_name = ""
+    last_file_name = ""
 
     while True:
         editor_running = is_editor_running(process_name)
 
         if editor_running:
-            project_name = extract_project_name(process_name) or fallback_details
+            window_title = get_editor_window_title(process_name)
+            project_name = extract_project_name_from_title(window_title) or fallback_details
+            file_name = extract_file_name_from_title(window_title, fallback_state)
             now = time.time()
             name_changed = project_name != last_project_name
-            should_refresh = (not presence_sent) or (now - last_update >= 15) or name_changed
+            file_changed = file_name != last_file_name
+            should_refresh = (not presence_sent) or (now - last_update >= 15) or name_changed or file_changed
 
             if should_refresh and ensure_connected():
                 try:
                     rpc.update(
                         details=project_name,
-                        state=state,
+                        state=file_name,
                         start=start_ts,
                         large_image=large_image,
                         large_text=large_text,
@@ -207,8 +242,11 @@ def main():
                         log("Presence enabled.")
                     if name_changed:
                         log(f"Project name updated: {project_name}")
+                    if file_changed:
+                        log(f"File name updated: {file_name}")
                     presence_sent = True
                     last_project_name = project_name
+                    last_file_name = file_name
                 except Exception as ex:
                     connected = False
                     if presence_sent:
@@ -228,6 +266,7 @@ def main():
                 break
             presence_sent = False
             last_project_name = ""
+            last_file_name = ""
             connected = False
 
         time.sleep(delay)
