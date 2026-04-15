@@ -13,6 +13,14 @@ from pypresence import Presence
 CONFIG_NAME = "discord-rpc-config.json"
 LOG_NAME = "rpc-python.log"
 FILE_RE = re.compile(r'([^\s\\/:*?"<>|]+\.[A-Za-z0-9]{1,10})')
+_UIA_IMPORT_ERROR = None
+try:
+    import psutil
+    from pywinauto import Desktop
+except Exception as _ex:
+    psutil = None
+    Desktop = None
+    _UIA_IMPORT_ERROR = str(_ex)
 
 
 def log(msg: str):
@@ -147,6 +155,56 @@ def extract_file_name_from_title(title: str, fallback_state: str):
     return fallback_state
 
 
+def get_active_file_name_from_tabs(process_name: str):
+    if Desktop is None or psutil is None:
+        return None
+    try:
+        targets = []
+        for p in psutil.process_iter(["pid", "name"]):
+            name = (p.info.get("name") or "").lower()
+            if name == f"{process_name}.exe".lower():
+                targets.append(p.info["pid"])
+        if not targets:
+            return None
+
+        for pid in targets:
+            windows = Desktop(backend="uia").windows(process=pid)
+            for w in windows:
+                try:
+                    tab = w.child_window(auto_id="MainTabControl", control_type="Tab")
+                    if not tab.exists(timeout=0):
+                        continue
+                    tab_wrap = tab.wrapper_object()
+                    items = tab_wrap.descendants(control_type="TabItem")
+                    for item in items:
+                        name = (item.window_text() or "").strip()
+                        if not name:
+                            continue
+                        selected = False
+                        try:
+                            selected = item.iface_selection_item.CurrentIsSelected
+                        except Exception:
+                            selected = False
+                        if selected:
+                            return os.path.basename(name)
+
+                    for item in items:
+                        name = (item.window_text() or "").strip()
+                        if FILE_RE.search(name):
+                            return os.path.basename(FILE_RE.search(name).group(1))
+
+                    buttons = tab_wrap.descendants(control_type="Button")
+                    for btn in buttons:
+                        name = (btn.window_text() or "").strip()
+                        if FILE_RE.search(name):
+                            return os.path.basename(FILE_RE.search(name).group(1))
+                except Exception:
+                    continue
+    except Exception:
+        return None
+    return None
+
+
 def launch_editor(path: str):
     if os.path.exists(path):
         subprocess.Popen([path], creationflags=0x00000008)
@@ -190,6 +248,9 @@ def main():
     if auto_launch:
         launch_editor(exe_path)
 
+    if _UIA_IMPORT_ERROR:
+        log(f"UIA tab tracking unavailable: {_UIA_IMPORT_ERROR}")
+
     start_ts = int(time.time())
 
     rpc = Presence(app_id)
@@ -220,7 +281,10 @@ def main():
         if editor_running:
             window_title = get_editor_window_title(process_name)
             project_name = extract_project_name_from_title(window_title) or fallback_details
-            file_name = extract_file_name_from_title(window_title, fallback_state)
+            file_name = (
+                get_active_file_name_from_tabs(process_name)
+                or extract_file_name_from_title(window_title, fallback_state)
+            )
             now = time.time()
             name_changed = project_name != last_project_name
             file_changed = file_name != last_file_name
