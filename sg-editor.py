@@ -38,8 +38,43 @@ SNIPPETS = {
     "Image declaration": 'image hero neutral = "images/hero/neutral.png"\n',
 }
 
-APP_DISPLAY_NAME = "Soviet Games Editor"
-DISCORD_RPC_CLIENT_ID = os.environ.get("DISCORD_RPC_CLIENT_ID", "").strip()
+BASE_DIR = Path(__file__).resolve().parent
+DISCORD_RPC_PATH = BASE_DIR / "discordrpc"
+
+
+def load_discord_rpc_config() -> dict[str, str]:
+    default_config = {
+        "app_display_name": "SGMEditor",
+        "client_id": "1494029959981830144",
+        "large_image_key": "sgmeditor",
+        "small_image_key": "sgmeditor_small",
+    }
+
+    config_path = DISCORD_RPC_PATH
+    if config_path.is_dir():
+        config_path = config_path / "config.json"
+
+    if not config_path.exists():
+        return default_config
+
+    try:
+        raw_config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return default_config
+
+    merged_config = default_config.copy()
+    for key in default_config:
+        value = raw_config.get(key)
+        if isinstance(value, str) and value.strip():
+            merged_config[key] = value.strip()
+    return merged_config
+
+
+DISCORD_RPC_CONFIG = load_discord_rpc_config()
+APP_DISPLAY_NAME = DISCORD_RPC_CONFIG["app_display_name"]
+DISCORD_RPC_CLIENT_ID = DISCORD_RPC_CONFIG["client_id"]
+DISCORD_LARGE_IMAGE_KEY = DISCORD_RPC_CONFIG["large_image_key"]
+DISCORD_SMALL_IMAGE_KEY = DISCORD_RPC_CONFIG["small_image_key"]
 
 
 @dataclass
@@ -92,11 +127,15 @@ class EditorTab:
 
 
 class DiscordPresenceManager:
-    def __init__(self, client_id: str):
+    def __init__(self, client_id: str, large_image_key: str, small_image_key: str):
         self.client_id = client_id
+        self.large_image_key = large_image_key
+        self.small_image_key = small_image_key
         self.rpc = None
         self.connected = False
         self.started_at = int(time.time())
+        self.last_payload: tuple[str, str] | None = None
+        self.last_error: str = ""
 
     @property
     def available(self) -> bool:
@@ -109,27 +148,47 @@ class DiscordPresenceManager:
             self.rpc = Presence(self.client_id)
             self.rpc.connect()
             self.connected = True
+            self.last_error = ""
         except Exception:
             self.rpc = None
             self.connected = False
+            self.last_error = "Could not connect to Discord. Make sure the Discord desktop app is running."
 
     def update(self, project_name: str, file_name: str):
         if not self.available:
             return
+        self.last_payload = (project_name, file_name)
         if not self.connected:
             self.connect()
         if not self.connected or self.rpc is None:
             return
         try:
+            payload = {
+                "details": project_name,
+                "state": file_name,
+                "large_text": APP_DISPLAY_NAME,
+                "start": self.started_at,
+            }
+            if self.large_image_key:
+                payload["large_image"] = self.large_image_key
+            if self.small_image_key:
+                payload["small_image"] = self.small_image_key
+                payload["small_text"] = APP_DISPLAY_NAME
+
             self.rpc.update(
-                details=project_name,
-                state=file_name,
-                large_text=APP_DISPLAY_NAME,
-                start=self.started_at,
+                **payload,
             )
+            self.last_error = ""
         except Exception:
             self.connected = False
             self.rpc = None
+            self.last_error = "Discord RPC update failed. The editor will retry automatically."
+
+    def ensure(self):
+        if not self.available or self.connected or self.last_payload is None:
+            return
+        project_name, file_name = self.last_payload
+        self.update(project_name, file_name)
 
     def clear(self):
         if not self.connected or self.rpc is None:
@@ -154,7 +213,11 @@ class ModEditorApp:
         self.project_dir: Path | None = None
         self.tree_paths: dict[str, Path] = {}
         self.tabs: list[EditorTab] = []
-        self.discord_presence = DiscordPresenceManager(DISCORD_RPC_CLIENT_ID)
+        self.discord_presence = DiscordPresenceManager(
+            DISCORD_RPC_CLIENT_ID,
+            DISCORD_LARGE_IMAGE_KEY,
+            DISCORD_SMALL_IMAGE_KEY,
+        )
 
         self.status_var = tk.StringVar(value="No project selected")
         self.search_var = tk.StringVar()
@@ -162,6 +225,8 @@ class ModEditorApp:
         self._build_style()
         self._build_menu()
         self._build_layout()
+        self.update_discord_presence()
+        self._schedule_discord_presence_retry()
 
     def _build_style(self):
         style = ttk.Style()
@@ -599,6 +664,10 @@ class ModEditorApp:
         current_tab = self.current_tab()
         file_name = current_tab.path.name if current_tab and current_tab.path else "No file open"
         self.discord_presence.update(project_name=project_name, file_name=file_name)
+
+    def _schedule_discord_presence_retry(self):
+        self.discord_presence.ensure()
+        self.root.after(15000, self._schedule_discord_presence_retry)
 
     def maybe_save_dirty_tabs(self) -> bool:
         dirty_tabs = [tab for tab in self.tabs if tab.dirty]

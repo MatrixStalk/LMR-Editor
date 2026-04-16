@@ -1,26 +1,41 @@
 RU
 
-Этот репозиторий создан для развития редактора `Soviet Games Editor`.
+Этот репозиторий создан для развития редактора `SGMEditor`.
 
 ## Discord RPC
 
-Редактор обновляет Discord Rich Presence в таком формате:
+Редактор берёт настройки Discord RPC из отдельного файла:
 
-- название приложения в Discord: `Soviet Games Editor`;
-- строка проекта: имя открытого проекта;
-- строка файла: имя текущего редактируемого файла.
+`D:\Games\S.T.A.L.K.E.R\STSoC\LMR-Editor\discordrpc\config.json`
 
-Чтобы RPC заработал, установите библиотеку:
+В этом файле задаются:
+
+- `app_display_name`;
+- `client_id`;
+- `large_image_key`;
+- `small_image_key`.
+
+Пример:
+
+```json
+{
+  "app_display_name": "SGMEditor",
+  "client_id": "1494029959981830144",
+  "large_image_key": "sgmeditor",
+  "small_image_key": "sgmeditor_small"
+}
+```
+
+Чтобы RPC работал, библиотека должна быть установлена:
 
 ```powershell
 python -m pip install pypresence
 ```
 
-Перед запуском задайте `DISCORD_RPC_CLIENT_ID` для вашего Discord application:
+Presence показывает:
 
-```powershell
-$env:DISCORD_RPC_CLIENT_ID="YOUR_DISCORD_APP_ID"
-python .\sg-editor.py
-```
+- имя редактора из `app_display_name`;
+- название проекта;
+- название текущего редактируемого файла.
 
-Если `pypresence` не установлен или переменная `DISCORD_RPC_CLIENT_ID` не задана, редактор продолжит работать без Discord RPC.
+Важно: картинка появится только если в Discord Application загружены ассеты с ключами из `large_image_key` и `small_image_key`. Локальный файл [large_image.png](D:/Games/S.T.A.L.K.E.R/STSoC/LMR-Editor/discordrpc/large_image.png) сам по себе в RPC не отправляется, он нужен только как исходник для загрузки в Discord Developer Portal.
