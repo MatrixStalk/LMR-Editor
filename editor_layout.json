@@ -48,15 +48,15 @@
     "y": 100
   },
   "editor": {
-    "x": 180,
+    "x": 200,
     "y": 134,
-    "width": 1467,
+    "width": 1420,
     "height": 815
   },
   "line_numbers": {
     "x": 148,
     "y": 134,
-    "width": 30,
+    "width": 50,
     "height": 815
   },
   "editor_scrollbar": {

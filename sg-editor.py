@@ -281,6 +281,13 @@ class EditorApp:
         self.editor_text = None
         self.line_numbers = None
         self.editor_scrollbar = None
+        self.editor_scroll_spacer = None
+        self.editor_scrollbar_images = {}
+        self.editor_scrollbar_thumb = None
+        self.editor_scrollbar_thumb_offset_y = 0
+        self.editor_scrollbar_view = (0.0, 1.0)
+        self.editor_scrollbar_hovered = False
+        self.editor_scrollbar_pressed = False
         self.header_id = None
         self.mode_id = None
         self.cursor_id = None
@@ -352,6 +359,10 @@ class EditorApp:
             "hide_btn_onmouse.png",
             "folder.png",
             "lunar_avatar.png",
+            "list_m.png",
+            "list_track_b.png",
+            "list_track_m.png",
+            "list_track_t.png",
             "me_logo.png",
             "py_logo.png",
             "settings.png",
@@ -578,22 +589,15 @@ class EditorApp:
         self.canvas.create_window(editor["x"], editor["y"], anchor="nw", window=self.editor_text, width=editor["width"], height=editor["height"])
 
         line_numbers = self.layout["line_numbers"]
-        self.line_numbers = tk.Text(
+        self.line_numbers = tk.Canvas(
             self.root,
             bg=PANEL_LINES_BACKGROUND,
-            fg="#6e6e6e",
-            font=editor_font,
             bd=0,
             highlightthickness=0,
             relief="flat",
-            wrap="none",
-            state="disabled",
-            padx=0,
-            pady=0,
-            spacing1=0,
-            spacing2=0,
-            spacing3=0,
             takefocus=0,
+            width=line_numbers["width"],
+            height=line_numbers["height"],
         )
         self.line_numbers.bind("<MouseWheel>", self._scroll_editor_from_line_numbers)
         self.line_numbers.bind("<Button-4>", self._scroll_editor_from_line_numbers)
@@ -608,19 +612,23 @@ class EditorApp:
         )
 
         scrollbar = self.layout["editor_scrollbar"]
-        self.editor_scrollbar = tk.Scrollbar(
+        self.editor_scrollbar = tk.Canvas(
             self.root,
-            orient="vertical",
-            command=self._scroll_editor_from_scrollbar,
+            bg=PANEL_BACKGROUND,
             bd=0,
-            relief="flat",
-            troughcolor="#101010",
-            activebackground="#56f4ee",
-            bg="#242424",
             highlightthickness=0,
-            elementborderwidth=0,
+            relief="flat",
             width=scrollbar["width"],
+            height=scrollbar["height"],
         )
+        self.editor_scrollbar.bind("<Button-1>", self._handle_editor_scrollbar_press)
+        self.editor_scrollbar.bind("<B1-Motion>", self._handle_editor_scrollbar_drag)
+        self.editor_scrollbar.bind("<ButtonRelease-1>", self._handle_editor_scrollbar_release)
+        self.editor_scrollbar.bind("<Motion>", self._handle_editor_scrollbar_motion)
+        self.editor_scrollbar.bind("<Leave>", self._handle_editor_scrollbar_leave)
+        self.editor_scrollbar.bind("<MouseWheel>", self._scroll_editor_from_line_numbers)
+        self.editor_scrollbar.bind("<Button-4>", self._scroll_editor_from_line_numbers)
+        self.editor_scrollbar.bind("<Button-5>", self._scroll_editor_from_line_numbers)
         self.canvas.create_window(
             scrollbar["x"],
             scrollbar["y"],
@@ -629,6 +637,7 @@ class EditorApp:
             width=scrollbar["width"],
             height=scrollbar["height"],
         )
+        self._render_editor_scrollbar(0.0, 1.0)
 
         files = self.layout["files"]
         self.file_tree = ttk.Treeview(self.root, show="tree", selectmode="browse", style="Files.Treeview")
@@ -670,10 +679,29 @@ class EditorApp:
     def _is_file_dirty(self, path: Path) -> bool:
         return self.file_buffers.get(path, "") != self.saved_file_snapshots.get(path, "")
 
+    def _set_editor_content(self, content: str):
+        if self.editor_text is None:
+            return
+        self.editor_text.delete("1.0", "end")
+        self.editor_text.insert("1.0", content)
+        self._apply_editor_scroll_space()
+
+    def _get_editor_content(self) -> str:
+        if self.editor_text is None:
+            return ""
+        return self.editor_text.get("1.0", "end-1c")
+
+    def _get_editor_line_count(self) -> int:
+        content = self._get_editor_content()
+        return max(1, content.count("\n") + 1)
+
+    def _apply_editor_scroll_space(self):
+        return
+
     def _update_current_buffer(self):
         if self.current_file is None or self.editor_text is None:
             return
-        current_text = self.editor_text.get("1.0", "end-1c")
+        current_text = self._get_editor_content()
         self.file_buffers[self.current_file] = current_text
         if current_text == self.saved_file_snapshots.get(self.current_file, ""):
             self.dirty_files.discard(self.current_file)
@@ -686,16 +714,98 @@ class EditorApp:
         self._request_render_file_tabs()
 
     def _sync_editor_vertical_views(self, first, last=None):
-        if self.line_numbers is not None:
-            self.line_numbers.yview_moveto(first)
-        if self.editor_scrollbar is not None:
-            self.editor_scrollbar.set(first, last if last is not None else first)
+        first_value = max(0.0, min(float(first), 1.0))
+        last_value = first_value if last is None else max(first_value, min(float(last), 1.0))
+        self.editor_scrollbar_view = (first_value, last_value)
+        self._refresh_line_numbers(force=True)
+        self._render_editor_scrollbar(first_value, last_value)
 
     def _scroll_editor_from_scrollbar(self, *args):
         if self.editor_text is None:
             return
         self.editor_text.yview(*args)
         self._update_status(refresh_lines=False)
+
+    def _render_editor_scrollbar(self, first: float, last: float):
+        if self.editor_scrollbar is None:
+            return
+        width = max(1, int(self.layout["editor_scrollbar"]["width"]))
+        height = max(1, int(self.layout["editor_scrollbar"]["height"]))
+        self.editor_scrollbar.delete("all")
+
+        background = self._load_asset_exact("list_m.png", width, height)
+        if background is not None:
+            self.editor_scrollbar_images["background"] = background
+            self.editor_scrollbar.create_image(0, 0, image=background, anchor="nw")
+
+        visible_ratio = max(0.0, min(last - first, 1.0))
+        thumb_height = int(round(height * visible_ratio))
+        min_thumb_height = min(height, max(22, width))
+        thumb_height = max(min_thumb_height, min(height, thumb_height))
+        max_thumb_y = max(0, height - thumb_height)
+        max_first = max(0.0, 1.0 - visible_ratio)
+        normalized_first = 0.0 if max_first <= 0.0 else max(0.0, min(first / max_first, 1.0))
+        thumb_y = int(round(max_thumb_y * normalized_first))
+        thumb_y = max(0, min(max_thumb_y, thumb_y))
+
+        thumb_top = self._load_asset_exact("list_track_t.png", width, min(22, thumb_height))
+        thumb_bottom_height = min(22, max(1, thumb_height - (thumb_top.height() if thumb_top is not None else 0)))
+        thumb_bottom = self._load_asset_exact("list_track_b.png", width, thumb_bottom_height)
+        middle_y = thumb_y + (thumb_top.height() if thumb_top is not None else 0)
+        middle_height = thumb_height - ((thumb_top.height() if thumb_top is not None else 0) + (thumb_bottom.height() if thumb_bottom is not None else 0))
+        thumb_middle = self._load_asset_exact("list_track_m.png", width, max(1, middle_height)) if middle_height > 0 else None
+
+        self.editor_scrollbar_thumb = (thumb_y, thumb_y + thumb_height)
+        if thumb_top is not None:
+            self.editor_scrollbar_images["thumb_top"] = thumb_top
+            self.editor_scrollbar.create_image(0, thumb_y, image=thumb_top, anchor="nw", tags=("scrollbar_thumb",))
+        if thumb_middle is not None:
+            self.editor_scrollbar_images["thumb_middle"] = thumb_middle
+            self.editor_scrollbar.create_image(0, middle_y, image=thumb_middle, anchor="nw", tags=("scrollbar_thumb",))
+        if thumb_bottom is not None:
+            self.editor_scrollbar_images["thumb_bottom"] = thumb_bottom
+            self.editor_scrollbar.create_image(0, thumb_y + thumb_height - thumb_bottom.height(), image=thumb_bottom, anchor="nw", tags=("scrollbar_thumb",))
+
+    def _move_editor_to_scroll_fraction(self, fraction: float):
+        if self.editor_text is None:
+            return
+        first, last = self.editor_scrollbar_view
+        visible_ratio = max(0.0, min(last - first, 1.0))
+        max_first = max(0.0, 1.0 - visible_ratio)
+        normalized_fraction = max(0.0, min(fraction, 1.0))
+        self.editor_text.yview_moveto(max_first * normalized_fraction)
+        self._update_status(refresh_lines=False)
+
+    def _handle_editor_scrollbar_press(self, event):
+        if self.editor_scrollbar is None:
+            return "break"
+        thumb = self.editor_scrollbar_thumb
+        if thumb is None:
+            return "break"
+        thumb_top, thumb_bottom = thumb
+        if thumb_top <= event.y <= thumb_bottom:
+            self.editor_scrollbar_thumb_offset_y = event.y - thumb_top
+            return "break"
+        height = max(1, int(self.layout["editor_scrollbar"]["height"]))
+        thumb_height = max(1, thumb_bottom - thumb_top)
+        target_fraction = (event.y - (thumb_height / 2)) / max(1, height - thumb_height)
+        self.editor_scrollbar_thumb_offset_y = thumb_height / 2
+        self._move_editor_to_scroll_fraction(target_fraction)
+        return "break"
+
+    def _handle_editor_scrollbar_drag(self, event):
+        thumb = self.editor_scrollbar_thumb
+        if thumb is None:
+            return "break"
+        height = max(1, int(self.layout["editor_scrollbar"]["height"]))
+        thumb_height = max(1, thumb[1] - thumb[0])
+        target_fraction = (event.y - self.editor_scrollbar_thumb_offset_y) / max(1, height - thumb_height)
+        self._move_editor_to_scroll_fraction(target_fraction)
+        return "break"
+
+    def _handle_editor_scrollbar_release(self, _event=None):
+        self.editor_scrollbar_thumb_offset_y = 0
+        return "break"
 
     def _scroll_editor_from_line_numbers(self, event):
         if self.editor_text is None:
@@ -1445,7 +1555,7 @@ class EditorApp:
         drag_y = max(0, min(int(drag_area.get("y", DEFAULT_LAYOUT["drag_area"]["y"])), height - drag_height))
         layout["drag_area"] = {"x": drag_x, "y": drag_y, "width": drag_width, "height": drag_height}
 
-        for key in ("editor", "line_numbers", "editor_scrollbar", "files"):
+        for key in ("line_numbers", "editor_scrollbar", "files"):
             block = layout[key]
             block_width = max(10, min(int(block.get("width", DEFAULT_LAYOUT[key]["width"])), width))
             block_height = max(10, min(int(block.get("height", DEFAULT_LAYOUT[key]["height"])), height))
@@ -1455,6 +1565,16 @@ class EditorApp:
             block["y"] = block_y
             block["width"] = block_width
             block["height"] = block_height
+
+        editor_block = layout["editor"]
+        editor_width = max(10, min(int(editor_block.get("width", DEFAULT_LAYOUT["editor"]["width"])), width))
+        editor_height = max(10, min(int(editor_block.get("height", DEFAULT_LAYOUT["editor"]["height"])), height))
+        editor_x = max(0, min(int(editor_block.get("x", DEFAULT_LAYOUT["editor"]["x"])), width - editor_width))
+        editor_y = max(0, min(int(editor_block.get("y", DEFAULT_LAYOUT["editor"]["y"])), height - editor_height))
+        editor_block["x"] = editor_x
+        editor_block["y"] = editor_y
+        editor_block["width"] = editor_width
+        editor_block["height"] = editor_height
 
         layout["header"]["x"] = max(0, min(int(layout["header"].get("x", DEFAULT_LAYOUT["header"]["x"])), width - 20))
         layout["header"]["y"] = max(0, min(int(layout["header"].get("y", DEFAULT_LAYOUT["header"]["y"])), height - 20))
@@ -1549,7 +1669,7 @@ class EditorApp:
 
     def _reload_layout(self):
         cursor_index = self.editor_text.index("insert") if self.editor_text is not None else "1.0"
-        editor_content = self.editor_text.get("1.0", "end-1c") if self.editor_text is not None else ""
+        editor_content = self._get_editor_content() if self.editor_text is not None else ""
         selected_path = None
         current_file_before = self.current_file
         if self.file_tree is not None:
@@ -1584,8 +1704,7 @@ class EditorApp:
         if current_file_before is not None and self.editor_text is not None:
             self.file_buffers[current_file_before] = editor_content
         if self.current_file is not None and self.editor_text is not None:
-            self.editor_text.delete("1.0", "end")
-            self.editor_text.insert("1.0", self.file_buffers.get(self.current_file, editor_content))
+            self._set_editor_content(self.file_buffers.get(self.current_file, editor_content))
             self.editor_text.mark_set("insert", cursor_index)
             self.editor_text.see(cursor_index)
         self._update_status()
@@ -1670,7 +1789,7 @@ class EditorApp:
 
     def open_file(self, path: Path):
         if self.current_file is not None and self.editor_text is not None:
-            self.file_buffers[self.current_file] = self.editor_text.get("1.0", "end-1c")
+            self.file_buffers[self.current_file] = self._get_editor_content()
         try:
             content = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -1682,8 +1801,7 @@ class EditorApp:
         content = self.file_buffers.get(path, content)
         self.file_buffers[path] = content
         self.dirty_files.discard(path)
-        self.editor_text.delete("1.0", "end")
-        self.editor_text.insert("1.0", content)
+        self._set_editor_content(content)
         self.editor_text.focus_set()
         self._refresh_line_numbers()
         self._update_status(refresh_lines=False)
@@ -1724,7 +1842,7 @@ class EditorApp:
     def save_current_file(self):
         if self.current_file is None:
             return
-        content = self.editor_text.get("1.0", "end-1c")
+        content = self._get_editor_content()
         self.file_buffers[self.current_file] = content
         self.current_file.write_text(content, encoding="utf-8")
         self.saved_file_snapshots[self.current_file] = content
@@ -1750,16 +1868,45 @@ class EditorApp:
     def _refresh_line_numbers(self, force=False):
         if self.editor_text is None or self.line_numbers is None:
             return
-        line_count = int(self.editor_text.index("end-1c").split(".")[0])
-        current_numbers = self.line_numbers.get("1.0", "end-1c")
-        expected_numbers = "\n".join(str(number) for number in range(1, line_count + 1))
-        if not force and line_count == self.last_line_count and current_numbers == expected_numbers:
+        try:
+            canvas_height = max(1, self.line_numbers.winfo_height())
+            canvas_width = max(1, self.line_numbers.winfo_width())
+            top_index = self.editor_text.index("@0,0")
+            top_dline = self.editor_text.dlineinfo(top_index)
+        except tk.TclError:
             return
-        self.last_line_count = line_count
-        self.line_numbers.config(state="normal")
-        self.line_numbers.delete("1.0", "end")
-        self.line_numbers.insert("1.0", expected_numbers)
-        self.line_numbers.config(state="disabled")
+        top_y = 0 if top_dline is None else int(top_dline[1])
+        viewport_signature = (top_index, top_y, canvas_height, canvas_width)
+        if not force and viewport_signature == getattr(self, "last_line_top_index", None):
+            return
+        self.last_line_top_index = viewport_signature
+        self.line_numbers.delete("all")
+        index = top_index
+        while True:
+            dline = self.editor_text.dlineinfo(index)
+            if dline is None:
+                break
+            y = int(dline[1])
+            line_height = int(dline[3])
+            if y > canvas_height:
+                break
+            line_number = index.split(".", 1)[0]
+            if int(line_number) > self._get_editor_line_count():
+                break
+            self.line_numbers.create_text(
+                canvas_width - 4,
+                y,
+                anchor="ne",
+                text=line_number,
+                fill="#6e6e6e",
+                font=("Cascadia Mono", 10),
+            )
+            next_index = self.editor_text.index(f"{index}+1line linestart")
+            if next_index == index:
+                break
+            if y + line_height >= canvas_height:
+                break
+            index = next_index
 
     def _schedule_line_numbers_refresh(self):
         if self.line_numbers_refresh_job is not None:
