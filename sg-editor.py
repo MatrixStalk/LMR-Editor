@@ -139,6 +139,15 @@ DEFAULT_LAYOUT = {
             "bottom_x": 256,
             "bottom_y": 570
         },
+        "action_buttons": {
+            "open_rpc_config": 90,
+            "open_layout_json": 110,
+            "reload_layout": 90,
+            "open_app_settings": 110,
+            "save_settings": 80,
+            "reset_layout": 130,
+            "reset_app_settings": 120
+        },
         "logos": {
             "lunar_x": 196,
             "lunar_y": 278,
@@ -267,6 +276,7 @@ class EditorApp:
         self.settings_content_items = []
         self.settings_window_bg = None
         self.settings_soviet_games_logo = None
+        self.settings_action_widgets = []
 
         self._build_window()
         self._build_popup_menus()
@@ -292,6 +302,15 @@ class EditorApp:
             "button_clicked.png",
             "button_idle.png",
             "button_onmouse.png",
+            "button_border_left_clicked.png",
+            "button_border_left_idle.png",
+            "button_border_left_onmouse.png",
+            "button_border_right_clicked.png",
+            "button_border_right_idle.png",
+            "button_border_right_onmouse.png",
+            "button_middle_clicked.png",
+            "button_middle_idle.png",
+            "button_middle_onmouse.png",
             "checkbox_off.png",
             "checkbox_on.png",
             "checkbox_onmouse.png",
@@ -706,6 +725,12 @@ class EditorApp:
     def _clear_settings_content(self):
         if self.settings_canvas is None:
             return
+        for widget in self.settings_action_widgets:
+            try:
+                widget.destroy()
+            except tk.TclError:
+                pass
+        self.settings_action_widgets.clear()
         for item in self.settings_content_items:
             self.settings_canvas.delete(item)
         self.settings_content_items.clear()
@@ -793,20 +818,20 @@ class EditorApp:
 
     def _render_discord_settings_tab(self):
         self._render_checkbox_row(0, 24, self.settings_vars["discord_rpc_enabled"], "Enable Discord RPC")
-        self._render_action_text("Open RPC Config", 0, 72, lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
+        self._render_action_button("open_rpc_config", "Open RPC Config", 0, 72, lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
 
     def _render_editor_settings_tab(self):
         self._render_checkbox_row(0, 24, self.settings_vars["auto_reload_layout"], "Auto reload layout JSON")
-        self._render_action_text("Open Layout JSON", 0, 72, lambda: self._open_path_in_system(LAYOUT_PATH))
-        self._render_action_text("Reload Layout", 0, 112, self._reload_layout)
+        self._render_action_button("open_layout_json", "Open Layout JSON", 0, 72, lambda: self._open_path_in_system(LAYOUT_PATH))
+        self._render_action_button("reload_layout", "Reload Layout", 0, 112, self._reload_layout)
 
     def _render_preferences_settings_tab(self):
-        self._render_action_text("Open App Settings", 0, 24, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
-        self._render_action_text("Save Settings", 0, 64, self._save_settings)
+        self._render_action_button("open_app_settings", "Open App Settings", 0, 24, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
+        self._render_action_button("save_settings", "Save Settings", 0, 64, self._save_settings)
 
     def _render_reset_settings_tab(self):
-        self._render_action_text("Reset Layout To Defaults", 0, 24, self._reset_layout_to_defaults)
-        self._render_action_text("Reset App Settings", 0, 64, self._reset_app_settings)
+        self._render_action_button("reset_layout", "Reset Layout To Defaults", 0, 24, self._reset_layout_to_defaults)
+        self._render_action_button("reset_app_settings", "Reset App Settings", 0, 64, self._reset_app_settings)
 
     def _render_checkbox_row(self, rel_x, rel_y, variable, label):
         x, y = self._content_anchor(rel_x, rel_y)
@@ -824,13 +849,55 @@ class EditorApp:
             self.settings_canvas.tag_bind(item, "<Enter>", lambda _e: self.settings_canvas.itemconfigure(icon_item, image=self.assets.get("checkbox_onmouse.png")))
             self.settings_canvas.tag_bind(item, "<Leave>", lambda _e: self.settings_canvas.itemconfigure(icon_item, image=self.assets.get("checkbox_on.png" if variable.get() else "checkbox_off.png")))
 
-    def _render_action_text(self, label, rel_x, rel_y, action):
+    def _render_action_button(self, button_id, label, rel_x, rel_y, action):
         x, y = self._content_anchor(rel_x, rel_y)
-        item = self.settings_canvas.create_text(x, y, text=label, anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
-        self.settings_content_items.append(item)
-        self.settings_canvas.tag_bind(item, "<Button-1>", lambda _e: action())
-        self.settings_canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, fill="#ffffff"))
-        self.settings_canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee"))
+        middle_width = int(self.layout["settings_window"]["action_buttons"].get(button_id, 100))
+        left_idle = self.assets.get("button_border_left_idle.png")
+        right_idle = self.assets.get("button_border_right_idle.png")
+        if left_idle is None or right_idle is None:
+            return
+
+        left_width = left_idle.width()
+        right_width = right_idle.width()
+        height = max(
+            left_idle.height(),
+            right_idle.height(),
+            self.assets.get("button_middle_idle.png").height() if self.assets.get("button_middle_idle.png") else 1,
+        )
+        total_width = left_width + middle_width + right_width
+        widget = tk.Canvas(self.settings_window, width=total_width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
+        widget._state_images = {}  # type: ignore[attr-defined]
+
+        def build_state(state_name: str):
+            left = self.assets.get(f"button_border_left_{state_name}.png")
+            middle = self._load_asset_exact(f"button_middle_{state_name}.png", middle_width, height)
+            right = self.assets.get(f"button_border_right_{state_name}.png")
+            if left is None or middle is None or right is None:
+                return
+            widget._state_images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
+
+        for state in ("idle", "onmouse", "clicked"):
+            build_state(state)
+
+        def draw_state(state_name: str):
+            state_images = widget._state_images.get(state_name)  # type: ignore[attr-defined]
+            if state_images is None:
+                return
+            left, middle, right = state_images
+            widget.delete("all")
+            widget.create_image(0, 0, image=left, anchor="nw")
+            widget.create_image(left_width, 0, image=middle, anchor="nw")
+            widget.create_image(left_width + middle_width, 0, image=right, anchor="nw")
+            widget.create_text(total_width // 2, height // 2, text=label, fill="#000000", font=("Cascadia Mono", 9, "bold"))
+
+        draw_state("idle")
+        widget.bind("<Enter>", lambda _e: draw_state("onmouse"))
+        widget.bind("<Leave>", lambda _e: draw_state("idle"))
+        widget.bind("<ButtonPress-1>", lambda _e: draw_state("clicked"))
+        widget.bind("<ButtonRelease-1>", lambda _e: (draw_state("onmouse"), action()))
+        self.settings_action_widgets.append(widget)
+        window_item = self.settings_canvas.create_window(x, y, anchor="nw", window=widget, width=total_width, height=height)
+        self.settings_content_items.append(window_item)
 
     def _render_info_settings_tab(self):
         layout = self.layout["settings_window"]
@@ -967,6 +1034,7 @@ class EditorApp:
         self.settings_window = None
         self.settings_canvas = None
         self.settings_window_bg = None
+        self.settings_soviet_games_logo = None
 
     @staticmethod
     def _deep_update(target, source):
@@ -1043,10 +1111,21 @@ class EditorApp:
             settings[key] = int(settings.get(key, default_settings[key]))
         for key in ("bg_width", "bg_height", "tabs_width", "tabs_height", "tab_step_y", "content_width", "content_height"):
             settings[key] = max(10, int(settings.get(key, default_settings[key])))
+        if not isinstance(settings.get("texts"), dict):
+            settings["texts"] = {}
+        for key, default_value in default_settings["texts"].items():
+            settings["texts"][key] = int(settings["texts"].get(key, default_value))
+        if not isinstance(settings.get("action_buttons"), dict):
+            settings["action_buttons"] = {}
+        for key, default_value in default_settings["action_buttons"].items():
+            settings["action_buttons"][key] = max(10, int(settings["action_buttons"].get(key, default_value)))
         if not isinstance(settings.get("logos"), dict):
             settings["logos"] = {}
         for key, default_value in default_settings["logos"].items():
-            settings["logos"][key] = int(settings["logos"].get(key, default_value))
+            value = int(settings["logos"].get(key, default_value))
+            if key in {"soviet_games_width", "soviet_games_height"}:
+                value = max(1, value)
+            settings["logos"][key] = value
 
         return layout
 

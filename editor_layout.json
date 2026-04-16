@@ -59,8 +59,8 @@
     "cursor_y": 955
   },
   "settings_window": {
-    "width": 511,
-    "height": 511,
+    "width": 512,
+    "height": 512,
     "alpha": 1.0,
     "offset_x": 700,
     "offset_y": 280,
@@ -89,21 +89,32 @@
     "content_height": 0,
     "texts": {
       "top_x": 333,
-      "top_y": 170,
+      "top_y": 180,
       "middle_x": 395,
-      "middle_y": 255,
+      "middle_y": 275,
       "discord_x": 333,
       "discord_y": 470,
       "bottom_x": 283,
-      "bottom_y": 375
+      "bottom_y": 385
+    },
+    "action_buttons": {
+      "open_rpc_config": 90,
+      "open_layout_json": 110,
+      "reload_layout": 90,
+      "open_app_settings": 110,
+      "save_settings": 80,
+      "reset_layout": 130,
+      "reset_app_settings": 120
     },
     "logos": {
       "lunar_x": 166,
-      "lunar_y": 202,
+      "lunar_y": 222,
       "python_x": 375,
-      "python_y": 377,
-      "soviet_games_x": 285,
-      "soviet_games_y": 25
+      "python_y": 387,
+      "soviet_games_x": 245,
+      "soviet_games_y": 15,
+      "soviet_games_width": 180,
+      "soviet_games_height": 180
     },
     "button_left_x": 196,
     "button_right_x": 294,
