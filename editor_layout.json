@@ -4,6 +4,12 @@
     "height": 1079,
     "drag_top_height": 52
   },
+  "drag_area": {
+    "x": 94,
+    "y": 22,
+    "width": 1720,
+    "height": 92
+  },
   "menu": {
     "project_x": 240,
     "file_x": 283,

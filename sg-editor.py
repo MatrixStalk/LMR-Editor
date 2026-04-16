@@ -60,6 +60,7 @@ def load_discord_rpc_config() -> dict[str, str]:
 
 DEFAULT_LAYOUT = {
     "window": {"width": 1919, "height": 1079, "drag_top_height": 52},
+    "drag_area": {"x": 94, "y": 22, "width": 1720, "height": 92},
     "menu": {"project_x": 148, "file_x": 203, "settings_x": 239, "y": 31},
     "logos": {"main_x": 878, "main_y": 29, "side_x": 108, "side_y": 81},
     "buttons": {
@@ -221,11 +222,12 @@ class EditorApp:
 
         self.canvas.bind("<ButtonPress-1>", self._start_drag)
         self.canvas.bind("<B1-Motion>", self._drag_window)
+        drag_area = self.layout["drag_area"]
         self.drag_zone_id = self.canvas.create_rectangle(
-            0,
-            0,
-            width,
-            self.layout["window"]["drag_top_height"],
+            drag_area["x"],
+            drag_area["y"],
+            drag_area["x"] + drag_area["width"],
+            drag_area["y"] + drag_area["height"],
             fill="",
             outline="",
             tags=("drag_zone",),
@@ -367,6 +369,13 @@ class EditorApp:
         layout["window"]["height"] = height
         layout["window"]["drag_top_height"] = max(0, min(int(layout["window"].get("drag_top_height", 52)), height))
 
+        drag_area = layout.get("drag_area", DEFAULT_LAYOUT["drag_area"])
+        drag_width = max(10, min(int(drag_area.get("width", DEFAULT_LAYOUT["drag_area"]["width"])), width))
+        drag_height = max(10, min(int(drag_area.get("height", DEFAULT_LAYOUT["drag_area"]["height"])), height))
+        drag_x = max(0, min(int(drag_area.get("x", DEFAULT_LAYOUT["drag_area"]["x"])), width - drag_width))
+        drag_y = max(0, min(int(drag_area.get("y", DEFAULT_LAYOUT["drag_area"]["y"])), height - drag_height))
+        layout["drag_area"] = {"x": drag_x, "y": drag_y, "width": drag_width, "height": drag_height}
+
         for key in ("editor", "line_numbers", "files"):
             block = layout[key]
             block_width = max(10, min(int(block.get("width", DEFAULT_LAYOUT[key]["width"])), width))
@@ -444,13 +453,15 @@ class EditorApp:
         self._update_status()
 
     def _start_drag(self, event):
-        if event.y > self.layout["window"]["drag_top_height"]:
+        drag_area = self.layout["drag_area"]
+        if not (drag_area["x"] <= event.x <= drag_area["x"] + drag_area["width"] and drag_area["y"] <= event.y <= drag_area["y"] + drag_area["height"]):
             return
         self.drag_offset_x = event.x_root - self.root.winfo_x()
         self.drag_offset_y = event.y_root - self.root.winfo_y()
 
     def _drag_window(self, event):
-        if event.y > self.layout["window"]["drag_top_height"]:
+        drag_area = self.layout["drag_area"]
+        if not (drag_area["x"] <= event.x <= drag_area["x"] + drag_area["width"] and drag_area["y"] <= event.y <= drag_area["y"] + drag_area["height"]):
             return
         x = event.x_root - self.drag_offset_x
         y = event.y_root - self.drag_offset_y
