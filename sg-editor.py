@@ -1,10 +1,11 @@
 import json
+import os
 import shutil
 import struct
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 try:
     from pypresence import Presence
@@ -19,6 +20,8 @@ LAYOUT_PATH = BASE_DIR / "editor_layout.json"
 
 BACKGROUND_IMAGE_PATH = ASSETS_DIR / "mb_bg.png"
 TRANSPARENT_COLOR = "#010203"
+PANEL_BACKGROUND = "#090909"
+PANEL_LINES_BACKGROUND = "#101010"
 TEXT_EXTENSIONS = {".json", ".md", ".py", ".rpy", ".rpym", ".toml", ".txt", ".xml", ".yml", ".yaml"}
 
 
@@ -37,7 +40,7 @@ def get_background_size():
             width, height = struct.unpack(">II", header[16:24])
             return width, height
     except OSError:
-        return DEFAULT_LAYOUT["window"]["width"], DEFAULT_LAYOUT["window"]["height"]
+        pass
     return DEFAULT_LAYOUT["window"]["width"], DEFAULT_LAYOUT["window"]["height"]
 
 
@@ -69,13 +72,13 @@ DEFAULT_LAYOUT = {
         "min_x": 1748,
         "min_y": 31,
         "close_x": 1782,
-        "close_y": 24,
+        "close_y": 24
     },
     "header": {"x": 136, "y": 93},
-    "editor": {"x": 93, "y": 101, "width": 1461, "height": 823},
-    "line_numbers": {"x": 58, "y": 101, "width": 28, "height": 823},
-    "files": {"x": 1676, "y": 77, "width": 140, "height": 844},
-    "status": {"mode_x": 106, "mode_y": 919, "cursor_x": 810, "cursor_y": 919},
+    "editor": {"x": 180, "y": 101, "width": 1374, "height": 823},
+    "line_numbers": {"x": 145, "y": 101, "width": 28, "height": 823},
+    "files": {"x": 1658, "y": 77, "width": 170, "height": 844},
+    "status": {"mode_x": 106, "mode_y": 919, "cursor_x": 810, "cursor_y": 919}
 }
 
 
@@ -161,22 +164,24 @@ class EditorApp:
 
         self.project_dir: Path | None = None
         self.current_file: Path | None = None
-        self.file_paths: list[Path] = []
         self.drag_offset_x = 0
         self.drag_offset_y = 0
         self.assets = self._load_assets()
         self.discord = DiscordPresenceManager()
 
         self.canvas = None
-        self.file_listbox = None
+        self.file_tree = None
         self.editor_text = None
         self.line_numbers = None
         self.header_id = None
         self.mode_id = None
         self.cursor_id = None
         self.drag_zone_id = None
+        self.popup_menus: dict[str, tk.Menu] = {}
+        self.tree_item_paths: dict[str, Path] = {}
 
         self._build_window()
+        self._build_popup_menus()
         self._bind_shortcuts()
         self._update_status()
         self._update_presence()
@@ -199,22 +204,63 @@ class EditorApp:
             "exit_btn_clicked.png",
             "exit_btn_idle.png",
             "exit_btn_onmouse.png",
+            "files.png",
             "hide_btn_clicked.png",
             "hide_btn_idle.png",
             "hide_btn_onmouse.png",
             "file_choose.png",
             "file_choose_last.png",
+            "folder.png",
             "me_logo.png",
             "sgme_logo.png",
         ):
             path = ASSETS_DIR / name
             if path.exists():
-                assets[name] = tk.PhotoImage(file=str(path))
+                image = tk.PhotoImage(file=str(path))
+                if name in {"folder.png", "files.png"}:
+                    image = self._fit_icon(image, 24, 24)
+                assets[name] = image
         return assets
+
+    def _fit_icon(self, image: tk.PhotoImage, max_width: int, max_height: int):
+        width = image.width()
+        height = image.height()
+        if width <= max_width and height <= max_height:
+            return image
+
+        scale_x = max(1, (width + max_width - 1) // max_width)
+        scale_y = max(1, (height + max_height - 1) // max_height)
+        scale = max(scale_x, scale_y)
+        return image.subsample(scale, scale)
+
+    def _configure_tree_style(self):
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(
+            "Files.Treeview",
+            background=PANEL_BACKGROUND,
+            fieldbackground=PANEL_BACKGROUND,
+            foreground="#f0f0f0",
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat",
+            rowheight=28,
+            font=("Segoe UI", 8, "bold"),
+        )
+        style.map(
+            "Files.Treeview",
+            background=[("selected", "#23262c")],
+            foreground=[("selected", "#ffffff")],
+        )
+        style.layout("Files.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
 
     def _build_window(self):
         width = self.layout["window"]["width"]
         height = self.layout["window"]["height"]
+        self._configure_tree_style()
         self.canvas = tk.Canvas(self.root, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         self.canvas.pack()
         if "mb_bg.png" in self.assets:
@@ -268,7 +314,7 @@ class EditorApp:
         editor = self.layout["editor"]
         self.editor_text = tk.Text(
             self.root,
-            bg=TRANSPARENT_COLOR,
+            bg=PANEL_BACKGROUND,
             fg="#d8d8d8",
             insertbackground="#56f4ee",
             selectbackground="#143c3d",
@@ -288,7 +334,7 @@ class EditorApp:
         line_numbers = self.layout["line_numbers"]
         self.line_numbers = tk.Text(
             self.root,
-            bg=TRANSPARENT_COLOR,
+            bg=PANEL_LINES_BACKGROUND,
             fg="#6e6e6e",
             font=("Cascadia Mono", 9),
             bd=0,
@@ -307,30 +353,39 @@ class EditorApp:
         )
 
         files = self.layout["files"]
-        self.file_listbox = tk.Listbox(
-            self.root,
-            bg=TRANSPARENT_COLOR,
-            fg="#cfcfcf",
-            selectbackground="#10292b",
-            selectforeground="#56f4ee",
-            font=("Cascadia Mono", 9),
-            bd=0,
-            highlightthickness=0,
-            relief="flat",
-            activestyle="none",
-            exportselection=False,
-        )
-        self.file_listbox.bind("<Double-Button-1>", self._open_selected_file)
-        self.file_listbox.bind("<Return>", self._open_selected_file)
-        self.canvas.create_window(files["x"], files["y"], anchor="nw", window=self.file_listbox, width=files["width"], height=files["height"])
+        self.file_tree = ttk.Treeview(self.root, show="tree", selectmode="browse", style="Files.Treeview")
+        self.file_tree.bind("<Double-Button-1>", self._open_selected_file)
+        self.file_tree.bind("<Return>", self._open_selected_file)
+        self.canvas.create_window(files["x"], files["y"], anchor="nw", window=self.file_tree, width=files["width"], height=files["height"])
 
         status = self.layout["status"]
         self.mode_id = self.canvas.create_text(status["mode_x"], status["mode_y"], anchor="nw", text="", fill="#d7d9d7", font=("Segoe UI", 7))
         self.cursor_id = self.canvas.create_text(status["cursor_x"], status["cursor_y"], anchor="nw", text="", fill="#7a8481", font=("Segoe UI", 7))
 
+    def _build_popup_menus(self):
+        self.popup_menus = {}
+
+        project_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        project_menu.add_command(label="Open Project", command=self.open_project)
+        project_menu.add_command(label="Reload Files", command=self._reload_project_files)
+        self.popup_menus["Project"] = project_menu
+
+        file_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        file_menu.add_command(label="Save", command=self.save_current_file)
+        file_menu.add_command(label="Export ZIP", command=self.export_zip)
+        file_menu.add_separator()
+        file_menu.add_command(label="Close", command=self.on_close)
+        self.popup_menus["File"] = file_menu
+
+        settings_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        settings_menu.add_command(label="Reload Layout", command=self._reload_layout)
+        settings_menu.add_command(label="Open Layout JSON", command=lambda: self._open_path_in_system(LAYOUT_PATH))
+        settings_menu.add_command(label="Open RPC Config", command=lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
+        self.popup_menus["Settings"] = settings_menu
+
     def _create_text_button(self, x, y, text, command):
         item = self.canvas.create_text(x, y, anchor="nw", text=text, fill="#d3d7d5", font=("Segoe UI", 9), tags=(f"button_{text}",))
-        self.canvas.tag_bind(item, "<Button-1>", lambda _e: command())
+        self.canvas.tag_bind(item, "<Button-1>", lambda event, label=text, fallback=command: self._show_top_menu(event, label, fallback))
         self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#56f4ee"))
         self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
         return item
@@ -347,6 +402,25 @@ class EditorApp:
     def _bind_shortcuts(self):
         self.root.bind("<Escape>", lambda _e: self.on_close())
         self.root.bind("<Control-s>", lambda _e: self.save_current_file())
+
+    def _show_top_menu(self, event, label, fallback_command):
+        menu = self.popup_menus.get(label)
+        if menu is None:
+            fallback_command()
+            return
+        try:
+            menu.tk_popup(event.x_root, event.y_root + 12)
+        finally:
+            menu.grab_release()
+
+    def _open_path_in_system(self, path: Path):
+        if not path.exists():
+            messagebox.showwarning("Not found", f"Path does not exist:\n{path}")
+            return
+        try:
+            os.startfile(str(path))
+        except OSError as error:
+            messagebox.showerror("Open failed", str(error))
 
     @staticmethod
     def _deep_update(target, source):
@@ -426,7 +500,11 @@ class EditorApp:
     def _reload_layout(self):
         cursor_index = self.editor_text.index("insert") if self.editor_text is not None else "1.0"
         editor_content = self.editor_text.get("1.0", "end-1c") if self.editor_text is not None else ""
-        file_selection = self.file_listbox.curselection() if self.file_listbox is not None else ()
+        selected_path = None
+        if self.file_tree is not None:
+            selection = self.file_tree.selection()
+            if selection:
+                selected_path = self.tree_item_paths.get(selection[0])
         current_x = self.root.winfo_x()
         current_y = self.root.winfo_y()
 
@@ -437,11 +515,16 @@ class EditorApp:
             self.canvas.destroy()
 
         self._build_window()
+        self._build_popup_menus()
 
         if self.project_dir is not None:
             self._reload_project_files()
-            if file_selection and self.file_listbox is not None and file_selection[0] < self.file_listbox.size():
-                self.file_listbox.selection_set(file_selection[0])
+            if selected_path is not None and self.file_tree is not None:
+                for item_id, path in self.tree_item_paths.items():
+                    if path == selected_path:
+                        self.file_tree.selection_set(item_id)
+                        self.file_tree.focus(item_id)
+                        break
 
         if self.current_file is not None and self.editor_text is not None:
             self.editor_text.delete("1.0", "end")
@@ -489,23 +572,37 @@ class EditorApp:
         self._update_presence()
 
     def _reload_project_files(self):
-        self.file_listbox.delete(0, "end")
-        self.file_paths.clear()
+        if self.file_tree is None:
+            return
+        self.file_tree.delete(*self.file_tree.get_children())
+        self.tree_item_paths.clear()
         if not self.project_dir or not self.project_dir.exists():
             return
-        files = sorted(
-            [path for path in self.project_dir.rglob("*") if path.is_file() and path.suffix.lower() in TEXT_EXTENSIONS],
-            key=lambda path: str(path.relative_to(self.project_dir)).lower(),
-        )
-        self.file_paths.extend(files)
-        for path in files:
-            self.file_listbox.insert("end", str(path.relative_to(self.project_dir)))
+        self._insert_tree_node("", self.project_dir)
+
+    def _insert_tree_node(self, parent_id, path: Path):
+        if not path.is_dir() and path.suffix.lower() not in TEXT_EXTENSIONS:
+            return
+        icon = self.assets.get("folder.png" if path.is_dir() else "files.png")
+        item_id = self.file_tree.insert(parent_id, "end", text=f"  {path.name}", image=icon, open=(path == self.project_dir))
+        self.tree_item_paths[item_id] = path
+        if path.is_dir():
+            for child in sorted(path.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
+                self._insert_tree_node(item_id, child)
 
     def _open_selected_file(self, _event=None):
-        selection = self.file_listbox.curselection()
+        if self.file_tree is None:
+            return
+        selection = self.file_tree.selection()
         if not selection:
             return
-        path = self.file_paths[selection[0]]
+        item_id = selection[0]
+        path = self.tree_item_paths.get(item_id)
+        if path is None:
+            return
+        if path.is_dir():
+            self.file_tree.item(item_id, open=not self.file_tree.item(item_id, "open"))
+            return
         self.open_file(path)
 
     def open_file(self, path: Path):
