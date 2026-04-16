@@ -22,6 +22,19 @@
     "side_x": 142,
     "side_y": 73
   },
+  "file_tabs": {
+    "x": 240,
+    "y": 108,
+    "gap": 5,
+    "height": 23,
+    "middle_min_width": 100,
+    "text_padding_x": 18,
+    "active_text_color": "#4ce4df",
+    "inactive_text_color": "#d7d9d7",
+    "close_padding_right": 12,
+    "close_color_active": "#4ce4df",
+    "close_color_inactive": "#d7d9d7"
+  },
   "buttons": {
     "open_x": 92,
     "open_y": 101,
@@ -90,12 +103,12 @@
     "texts": {
       "top_x": 333,
       "top_y": 180,
-      "middle_x": 395,
-      "middle_y": 275,
+      "middle_x": 355,
+      "middle_y": 425,
       "discord_x": 333,
-      "discord_y": 470,
-      "bottom_x": 283,
-      "bottom_y": 385
+      "discord_y": 320,
+      "bottom_x": 333,
+      "bottom_y": 245
     },
     "action_buttons": {
       "open_rpc_config": {
@@ -135,10 +148,10 @@
       }
     },
     "logos": {
-      "lunar_x": 166,
-      "lunar_y": 222,
-      "python_x": 375,
-      "python_y": 387,
+      "lunar_x": 154,
+      "lunar_y": 375,
+      "python_x": 430,
+      "python_y": 423.5,
       "soviet_games_x": 245,
       "soviet_games_y": 15,
       "soviet_games_width": 180,

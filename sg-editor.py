@@ -87,6 +87,19 @@ DEFAULT_LAYOUT = {
     "drag_area": {"x": 94, "y": 22, "width": 1720, "height": 92},
     "menu": {"project_x": 148, "file_x": 203, "settings_x": 239, "y": 31},
     "logos": {"main_x": 878, "main_y": 29, "side_x": 108, "side_y": 81},
+    "file_tabs": {
+        "x": 180,
+        "y": 101,
+        "gap": 6,
+        "height": 34,
+        "middle_min_width": 100,
+        "text_padding_x": 18,
+        "active_text_color": "#4ce4df",
+        "inactive_text_color": "#d7d9d7",
+        "close_padding_right": 12,
+        "close_color_active": "#4ce4df",
+        "close_color_inactive": "#d7d9d7",
+    },
     "buttons": {
         "open_x": 102,
         "open_y": 66,
@@ -251,9 +264,13 @@ class EditorApp:
 
         self.project_dir: Path | None = None
         self.current_file: Path | None = None
+        self.open_files: list[Path] = []
+        self.file_buffers: dict[Path, str] = {}
+        self.dirty_files: set[Path] = set()
         self.drag_offset_x = 0
         self.drag_offset_y = 0
         self.assets = self._load_assets()
+        self.resized_asset_cache = {}
         self.discord = DiscordPresenceManager()
         self.app_settings = APP_SETTINGS.copy()
 
@@ -277,6 +294,11 @@ class EditorApp:
         self.settings_window_bg = None
         self.settings_soviet_games_logo = None
         self.settings_action_widgets = []
+        self.file_tab_widgets = []
+        self.file_tab_window_ids = []
+        self.file_tab_render_job = None
+        self.hovered_tree_item = None
+        self.last_line_count = 0
 
         self._build_window()
         self._build_popup_menus()
@@ -329,6 +351,15 @@ class EditorApp:
             "settings_bg.png",
             "sg_logo.png",
             "sgme_logo.png",
+            "tab_inactive_l.png",
+            "tab_inactive_m.png",
+            "tab_inactive_r.png",
+            "tab_onmouse_l.png",
+            "tab_onmouse_m.png",
+            "tab_onmouse_r.png",
+            "tab_selected_l.png",
+            "tab_selected_m.png",
+            "tab_selected_r.png",
         ):
             path = ASSETS_DIR / name
             if path.exists():
@@ -490,15 +521,8 @@ class EditorApp:
         self._create_image_button(buttons["min_x"], buttons["min_y"], "hide_btn_idle.png", "hide_btn_onmouse.png", "hide_btn_clicked.png", self._minimize_window)
         self._create_image_button(buttons["close_x"], buttons["close_y"], "exit_btn_idle.png", "exit_btn_onmouse.png", "exit_btn_clicked.png", self.on_close)
 
-        header = self.layout["header"]
-        self.header_id = self.canvas.create_text(
-            header["x"],
-            header["y"],
-            anchor="nw",
-            text="# no file selected",
-            fill="#4ce4df",
-            font=("Cascadia Mono", 10),
-        )
+        self.header_id = None
+        self._render_file_tabs()
 
         editor = self.layout["editor"]
         self.editor_text = tk.Text(
@@ -515,8 +539,9 @@ class EditorApp:
             wrap="none",
             undo=True,
         )
-        self.editor_text.bind("<KeyRelease>", lambda _e: self._update_status())
-        self.editor_text.bind("<ButtonRelease>", lambda _e: self._update_status())
+        self.editor_text.bind("<Button-1>", lambda _e: self.editor_text.focus_set())
+        self.editor_text.bind("<KeyRelease>", self._handle_editor_key_release)
+        self.editor_text.bind("<ButtonRelease>", lambda _e: self._update_status(refresh_lines=False))
         self.editor_text.bind("<Control-s>", lambda _e: self.save_current_file())
         self.canvas.create_window(editor["x"], editor["y"], anchor="nw", window=self.editor_text, width=editor["width"], height=editor["height"])
 
@@ -545,6 +570,9 @@ class EditorApp:
         self.file_tree = ttk.Treeview(self.root, show="tree", selectmode="browse", style="Files.Treeview")
         self.file_tree.bind("<Double-Button-1>", self._open_selected_file)
         self.file_tree.bind("<Return>", self._open_selected_file)
+        self.file_tree.bind("<Motion>", self._handle_file_tree_hover)
+        self.file_tree.bind("<Leave>", self._clear_file_tree_hover)
+        self.file_tree.tag_configure("hover", background="#143c3d", foreground="#56f4ee")
         self.canvas.create_window(files["x"], files["y"], anchor="nw", window=self.file_tree, width=files["width"], height=files["height"])
 
         status = self.layout["status"]
@@ -574,6 +602,143 @@ class EditorApp:
             self.canvas.tag_bind(item, "<Button-1>", lambda event, label=text, fallback=command: self._show_top_menu(event, label, fallback))
         self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#56f4ee"))
         self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
+
+    def _is_file_dirty(self, path: Path) -> bool:
+        return path in self.dirty_files
+
+    def _update_current_buffer(self):
+        if self.current_file is None or self.editor_text is None:
+            return
+        self.file_buffers[self.current_file] = self.editor_text.get("1.0", "end-1c")
+        self.dirty_files.add(self.current_file)
+
+    def _handle_editor_key_release(self, _event=None):
+        self._update_current_buffer()
+        self._update_status(refresh_lines=True)
+        self._request_render_file_tabs()
+
+    def _set_tree_item_hover(self, item_id):
+        if self.file_tree is None:
+            return
+        if self.hovered_tree_item and self.file_tree.exists(self.hovered_tree_item):
+            current_tags = tuple(tag for tag in self.file_tree.item(self.hovered_tree_item, "tags") if tag != "hover")
+            self.file_tree.item(self.hovered_tree_item, tags=current_tags)
+        self.hovered_tree_item = None
+        if item_id and self.file_tree.exists(item_id):
+            current_tags = tuple(tag for tag in self.file_tree.item(item_id, "tags") if tag != "hover")
+            self.file_tree.item(item_id, tags=current_tags + ("hover",))
+            self.hovered_tree_item = item_id
+
+    def _handle_file_tree_hover(self, event):
+        if self.file_tree is None:
+            return
+        item_id = self.file_tree.identify_row(event.y)
+        self._set_tree_item_hover(item_id)
+
+    def _clear_file_tree_hover(self, _event=None):
+        self._set_tree_item_hover(None)
+
+    def _clear_file_tabs(self):
+        self.file_tab_render_job = None
+        if self.canvas is not None:
+            for item_id in self.file_tab_window_ids:
+                try:
+                    self.canvas.delete(item_id)
+                except tk.TclError:
+                    pass
+        self.file_tab_window_ids.clear()
+        for widget in self.file_tab_widgets:
+            try:
+                widget.destroy()
+            except tk.TclError:
+                pass
+        self.file_tab_widgets.clear()
+
+    def _request_render_file_tabs(self):
+        if self.root is None:
+            return
+        if self.file_tab_render_job is not None:
+            return
+
+        def _run():
+            self.file_tab_render_job = None
+            self._render_file_tabs()
+
+        self.file_tab_render_job = self.root.after_idle(_run)
+
+    def _render_file_tabs(self):
+        if self.canvas is None:
+            return
+        self._clear_file_tabs()
+        layout = self.layout["file_tabs"]
+        x = layout["x"]
+        y = layout["y"]
+        gap = layout["gap"]
+        height = layout["height"]
+        for path in self.open_files:
+            tab = self._create_file_tab_widget(path, height)
+            total_width = tab.winfo_reqwidth()
+            self.file_tab_widgets.append(tab)
+            item_id = self.canvas.create_window(x, y, anchor="nw", window=tab, width=total_width, height=height)
+            self.file_tab_window_ids.append(item_id)
+            x += total_width + gap
+
+    def _create_file_tab_widget(self, path: Path, height: int):
+        layout = self.layout["file_tabs"]
+        label = f"* {path.name}" if self._is_file_dirty(path) else path.name
+        state = "selected" if path == self.current_file else "inactive"
+        left_idle = self.assets.get(f"tab_{state}_l.png")
+        right_idle = self.assets.get(f"tab_{state}_r.png")
+        left_width = max(1, int(round(left_idle.width() * (height / max(1, left_idle.height()))))) if left_idle else 10
+        right_width = max(1, int(round(right_idle.width() * (height / max(1, right_idle.height()))))) if right_idle else 10
+        close_reserved = layout["close_padding_right"] + 12
+        estimated_middle = max(layout["middle_min_width"], len(label) * 8 + layout["text_padding_x"] * 2 + close_reserved)
+        total_width = left_width + estimated_middle + right_width
+        widget = tk.Canvas(self.root, width=total_width, height=height, bg=PANEL_BACKGROUND, highlightthickness=0, bd=0)
+        widget._images = {}  # type: ignore[attr-defined]
+
+        def build_state(state_name: str):
+            left = self._load_asset_exact(f"tab_{state_name}_l.png", left_width, height)
+            middle = self._load_asset_exact(f"tab_{state_name}_m.png", estimated_middle, height)
+            right = self._load_asset_exact(f"tab_{state_name}_r.png", right_width, height)
+            if left is None or middle is None or right is None:
+                return
+            widget._images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
+
+        for state_name in ("inactive", "onmouse", "selected"):
+            build_state(state_name)
+
+        def draw_state(state_name: str):
+            images = widget._images.get(state_name)  # type: ignore[attr-defined]
+            if images is None:
+                return
+            left, middle, right = images
+            text_color = layout["active_text_color"] if path == self.current_file else layout["inactive_text_color"]
+            close_color = layout["close_color_active"] if path == self.current_file else layout["close_color_inactive"]
+            widget.delete("all")
+            widget.create_rectangle(0, 0, total_width, height, fill=PANEL_BACKGROUND, outline=PANEL_BACKGROUND)
+            widget.create_image(0, 0, image=left, anchor="nw")
+            widget.create_image(left_width, 0, image=middle, anchor="nw")
+            widget.create_image(left_width + estimated_middle, 0, image=right, anchor="nw")
+            widget.create_text((total_width - close_reserved) // 2, height // 2, text=label, fill=text_color, font=("Cascadia Mono", 9, "bold"))
+            close_item = widget.create_text(
+                total_width - layout["close_padding_right"],
+                height // 2,
+                text="x",
+                fill=close_color,
+                font=("Cascadia Mono", 9, "bold"),
+            )
+            widget.tag_bind(close_item, "<Enter>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "onmouse"))
+            def handle_close(_event=None, p=path):
+                self.close_file_tab(p)
+                return "break"
+            widget.tag_bind(close_item, "<Button-1>", handle_close)
+
+        draw_state(state)
+        widget.bind("<Enter>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "onmouse"))
+        widget.bind("<Leave>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "inactive"))
+        widget.bind("<Button-1>", lambda _e, p=path: self.switch_to_file(p))
+        return widget
         return item
 
     def _create_image_button(self, x, y, idle_name, hover_name, pressed_name, command):
@@ -587,7 +752,12 @@ class EditorApp:
 
     def _bind_shortcuts(self):
         self.root.bind("<Escape>", lambda _e: self.on_close())
-        self.root.bind("<Control-s>", lambda _e: self.save_current_file())
+        self.root.bind("<Control-s>", lambda _e: (self.save_current_file(), "break"))
+        self.root.bind("<Control-z>", lambda _e: (self.editor_text.edit_undo() if self.editor_text else None, self._handle_editor_key_release(), "break"))
+        self.root.bind("<Control-y>", lambda _e: (self.editor_text.edit_redo() if self.editor_text else None, self._handle_editor_key_release(), "break"))
+        self.root.bind("<Control-Shift-Z>", lambda _e: (self.editor_text.edit_redo() if self.editor_text else None, self._handle_editor_key_release(), "break"))
+        self.root.bind("<Control-o>", lambda _e: (self.open_project(), "break"))
+        self.root.bind("<Control-w>", lambda _e: (self.close_file_tab(self.current_file) if self.current_file else None, "break"))
 
     def _show_top_menu(self, event, label, fallback_command):
         menu = self.popup_menus.get(label)
@@ -1105,6 +1275,21 @@ class EditorApp:
             layout["menu"][name] = max(0, min(int(layout["menu"].get(name, DEFAULT_LAYOUT["menu"][name])), width - 20))
         layout["menu"]["y"] = max(0, min(int(layout["menu"].get("y", DEFAULT_LAYOUT["menu"]["y"])), height - 20))
 
+        file_tabs = layout.get("file_tabs", DEFAULT_LAYOUT["file_tabs"])
+        layout["file_tabs"] = {
+            "x": max(0, min(int(file_tabs.get("x", DEFAULT_LAYOUT["file_tabs"]["x"])), width - 20)),
+            "y": max(0, min(int(file_tabs.get("y", DEFAULT_LAYOUT["file_tabs"]["y"])), height - 20)),
+            "gap": max(0, int(file_tabs.get("gap", DEFAULT_LAYOUT["file_tabs"]["gap"]))),
+            "height": max(10, int(file_tabs.get("height", DEFAULT_LAYOUT["file_tabs"]["height"]))),
+            "middle_min_width": max(20, int(file_tabs.get("middle_min_width", DEFAULT_LAYOUT["file_tabs"]["middle_min_width"]))),
+            "text_padding_x": max(0, int(file_tabs.get("text_padding_x", DEFAULT_LAYOUT["file_tabs"]["text_padding_x"]))),
+            "active_text_color": str(file_tabs.get("active_text_color", DEFAULT_LAYOUT["file_tabs"]["active_text_color"])),
+            "inactive_text_color": str(file_tabs.get("inactive_text_color", DEFAULT_LAYOUT["file_tabs"]["inactive_text_color"])),
+            "close_padding_right": max(0, int(file_tabs.get("close_padding_right", DEFAULT_LAYOUT["file_tabs"]["close_padding_right"]))),
+            "close_color_active": str(file_tabs.get("close_color_active", DEFAULT_LAYOUT["file_tabs"]["close_color_active"])),
+            "close_color_inactive": str(file_tabs.get("close_color_inactive", DEFAULT_LAYOUT["file_tabs"]["close_color_inactive"])),
+        }
+
         for key in ("main_x", "side_x"):
             layout["logos"][key] = max(0, min(int(layout["logos"].get(key, DEFAULT_LAYOUT["logos"][key])), width - 20))
         for key in ("main_y", "side_y"):
@@ -1174,6 +1359,7 @@ class EditorApp:
         cursor_index = self.editor_text.index("insert") if self.editor_text is not None else "1.0"
         editor_content = self.editor_text.get("1.0", "end-1c") if self.editor_text is not None else ""
         selected_path = None
+        current_file_before = self.current_file
         if self.file_tree is not None:
             selection = self.file_tree.selection()
             if selection:
@@ -1203,14 +1389,15 @@ class EditorApp:
                         self.file_tree.focus(item_id)
                         break
 
+        if current_file_before is not None and self.editor_text is not None:
+            self.file_buffers[current_file_before] = editor_content
         if self.current_file is not None and self.editor_text is not None:
             self.editor_text.delete("1.0", "end")
-            self.editor_text.insert("1.0", editor_content)
+            self.editor_text.insert("1.0", self.file_buffers.get(self.current_file, editor_content))
             self.editor_text.mark_set("insert", cursor_index)
             self.editor_text.see(cursor_index)
-            self.canvas.itemconfigure(self.header_id, text=f"# {self.current_file.name}")
-
         self._update_status()
+        self._request_render_file_tabs()
 
     def _start_drag(self, event):
         drag_area = self.layout["drag_area"]
@@ -1244,9 +1431,14 @@ class EditorApp:
         if not folder:
             return
         self.project_dir = Path(folder)
+        self.open_files.clear()
+        self.file_buffers.clear()
+        self.dirty_files.clear()
+        self.current_file = None
         self._reload_project_files()
         self._update_status()
         self._update_presence()
+        self._request_render_file_tabs()
 
     def _reload_project_files(self):
         if self.file_tree is None:
@@ -1283,23 +1475,65 @@ class EditorApp:
         self.open_file(path)
 
     def open_file(self, path: Path):
+        if self.current_file is not None and self.editor_text is not None:
+            self.file_buffers[self.current_file] = self.editor_text.get("1.0", "end-1c")
         try:
             content = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             content = path.read_text(encoding="utf-8", errors="replace")
+        if path not in self.open_files:
+            self.open_files.append(path)
         self.current_file = path
+        content = self.file_buffers.get(path, content)
+        self.file_buffers[path] = content
+        self.dirty_files.discard(path)
         self.editor_text.delete("1.0", "end")
         self.editor_text.insert("1.0", content)
-        self.canvas.itemconfigure(self.header_id, text=f"# {path.name}")
+        self.editor_text.focus_set()
         self._refresh_line_numbers()
-        self._update_status()
+        self._update_status(refresh_lines=False)
         self._update_presence()
+        self._request_render_file_tabs()
+
+    def switch_to_file(self, path: Path):
+        if path == self.current_file:
+            return
+        self.open_file(path)
+
+    def close_file_tab(self, path: Path):
+        if path not in self.open_files:
+            return
+        was_current = path == self.current_file
+        current_index = self.open_files.index(path)
+        self.open_files.remove(path)
+        self.file_buffers.pop(path, None)
+        self.dirty_files.discard(path)
+        if not self.open_files:
+            self.current_file = None
+            if self.editor_text is not None:
+                self.editor_text.delete("1.0", "end")
+                self.editor_text.focus_set()
+            self.last_line_count = 0
+            self._refresh_line_numbers(force=True)
+            self._update_status(refresh_lines=False)
+            self._update_presence()
+            self._request_render_file_tabs()
+            return
+        if was_current:
+            next_index = max(0, min(current_index, len(self.open_files) - 1))
+            self.open_file(self.open_files[next_index])
+        else:
+            self._request_render_file_tabs()
 
     def save_current_file(self):
         if self.current_file is None:
             return
-        self.current_file.write_text(self.editor_text.get("1.0", "end-1c"), encoding="utf-8")
+        content = self.editor_text.get("1.0", "end-1c")
+        self.file_buffers[self.current_file] = content
+        self.current_file.write_text(content, encoding="utf-8")
+        self.dirty_files.discard(self.current_file)
         self._update_status()
+        self._request_render_file_tabs()
 
     def export_zip(self):
         if not self.project_dir:
@@ -1316,21 +1550,25 @@ class EditorApp:
             return
         shutil.make_archive(str(Path(destination).with_suffix("")), "zip", root_dir=self.project_dir)
 
-    def _refresh_line_numbers(self):
+    def _refresh_line_numbers(self, force=False):
         line_count = int(self.editor_text.index("end-1c").split(".")[0])
+        if not force and line_count == self.last_line_count:
+            return
+        self.last_line_count = line_count
         data = "\n".join(str(number) for number in range(1, line_count + 1))
         self.line_numbers.config(state="normal")
         self.line_numbers.delete("1.0", "end")
         self.line_numbers.insert("1.0", data)
         self.line_numbers.config(state="disabled")
 
-    def _update_status(self):
+    def _update_status(self, refresh_lines=True):
         project_name = self.project_dir.name if self.project_dir else "No project open"
         current_name = self.current_file.name if self.current_file else "No file open"
         line, column = self.editor_text.index("insert").split(".")
         self.canvas.itemconfigure(self.mode_id, text=f"Mode: {project_name}")
         self.canvas.itemconfigure(self.cursor_id, text=f"{current_name}   String: {line}   Column: {column}")
-        self._refresh_line_numbers()
+        if refresh_lines:
+            self._refresh_line_numbers()
 
     def _update_presence(self):
         project_name = self.project_dir.name if self.project_dir else "No project open"
