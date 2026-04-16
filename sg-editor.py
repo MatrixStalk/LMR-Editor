@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
 DISCORD_RPC_PATH = BASE_DIR / "discordrpc"
 LAYOUT_PATH = BASE_DIR / "editor_layout.json"
+APP_SETTINGS_PATH = BASE_DIR / "app_settings.json"
 
 BACKGROUND_IMAGE_PATH = ASSETS_DIR / "mb_bg.png"
 TRANSPARENT_COLOR = "#010203"
@@ -61,6 +62,19 @@ def load_discord_rpc_config() -> dict[str, str]:
     return merged
 
 
+def load_app_settings():
+    default_settings = {
+        "auto_reload_layout": True,
+        "discord_rpc_enabled": True,
+    }
+    settings = load_json(APP_SETTINGS_PATH, default_settings)
+    merged = default_settings.copy()
+    for key, value in settings.items():
+        if isinstance(value, bool):
+            merged[key] = value
+    return merged
+
+
 DEFAULT_LAYOUT = {
     "window": {"width": 1919, "height": 1079, "drag_top_height": 52},
     "drag_area": {"x": 94, "y": 22, "width": 1720, "height": 92},
@@ -78,12 +92,35 @@ DEFAULT_LAYOUT = {
     "editor": {"x": 180, "y": 101, "width": 1374, "height": 823},
     "line_numbers": {"x": 145, "y": 101, "width": 28, "height": 823},
     "files": {"x": 1658, "y": 77, "width": 170, "height": 844},
-    "status": {"mode_x": 106, "mode_y": 919, "cursor_x": 810, "cursor_y": 919}
+    "status": {"mode_x": 106, "mode_y": 919, "cursor_x": 810, "cursor_y": 919},
+    "settings_window": {
+        "width": 512,
+        "height": 512,
+        "offset_x": 100,
+        "offset_y": 80,
+        "title_icon_x": 28,
+        "title_icon_y": 26,
+        "title_x": 154,
+        "title_y": 50,
+        "tabs_x": 28,
+        "tabs_y": 120,
+        "tabs_width": 146,
+        "tabs_height": 300,
+        "tab_step_y": 50,
+        "content_x": 196,
+        "content_y": 126,
+        "content_width": 286,
+        "content_height": 290,
+        "button_left_x": 196,
+        "button_right_x": 294,
+        "button_y": 430
+    }
 }
 
 
 RPC_CONFIG = load_discord_rpc_config()
 APP_DISPLAY_NAME = RPC_CONFIG["app_display_name"]
+APP_SETTINGS = load_app_settings()
 
 
 class DiscordPresenceManager:
@@ -95,9 +132,10 @@ class DiscordPresenceManager:
         self.connected = False
         self.started_at = int(time.time())
         self.last_payload = None
+        self.enabled = APP_SETTINGS["discord_rpc_enabled"]
 
     def connect(self):
-        if Presence is None or not self.client_id or self.connected:
+        if not self.enabled or Presence is None or not self.client_id or self.connected:
             return
         try:
             self.rpc = Presence(self.client_id)
@@ -109,6 +147,8 @@ class DiscordPresenceManager:
 
     def update(self, project_name: str, file_name: str):
         self.last_payload = (project_name, file_name)
+        if not self.enabled:
+            return
         if not self.connected:
             self.connect()
         if not self.connected or self.rpc is None:
@@ -131,7 +171,7 @@ class DiscordPresenceManager:
             self.rpc = None
 
     def ensure(self):
-        if self.connected or self.last_payload is None:
+        if not self.enabled or self.connected or self.last_payload is None:
             return
         self.update(*self.last_payload)
 
@@ -168,6 +208,7 @@ class EditorApp:
         self.drag_offset_y = 0
         self.assets = self._load_assets()
         self.discord = DiscordPresenceManager()
+        self.app_settings = APP_SETTINGS.copy()
 
         self.canvas = None
         self.file_tree = None
@@ -179,6 +220,9 @@ class EditorApp:
         self.drag_zone_id = None
         self.popup_menus: dict[str, tk.Menu] = {}
         self.tree_item_paths: dict[str, Path] = {}
+        self.settings_window = None
+        self.settings_canvas = None
+        self.settings_vars: dict[str, tk.BooleanVar] = {}
 
         self._build_window()
         self._build_popup_menus()
@@ -201,6 +245,9 @@ class EditorApp:
         assets = {}
         for name in (
             "mb_bg.png",
+            "button_clicked.png",
+            "button_idle.png",
+            "button_onmouse.png",
             "exit_btn_clicked.png",
             "exit_btn_idle.png",
             "exit_btn_onmouse.png",
@@ -212,6 +259,8 @@ class EditorApp:
             "file_choose_last.png",
             "folder.png",
             "me_logo.png",
+            "settings.png",
+            "settings_bg.png",
             "sgme_logo.png",
         ):
             path = ASSETS_DIR / name
@@ -219,6 +268,10 @@ class EditorApp:
                 image = tk.PhotoImage(file=str(path))
                 if name in {"folder.png", "files.png"}:
                     image = self._fit_icon(image, 24, 24)
+                elif name in {"button_clicked.png", "button_idle.png", "button_onmouse.png"}:
+                    image = self._fit_icon(image, 208, 44)
+                elif name == "settings.png":
+                    image = self._fit_icon(image, 96, 96)
                 assets[name] = image
         return assets
 
@@ -284,7 +337,7 @@ class EditorApp:
         menu = self.layout["menu"]
         self._create_text_button(menu["project_x"], menu["y"], "Project", self.open_project)
         self._create_text_button(menu["file_x"], menu["y"], "File", self.save_current_file)
-        self._create_text_button(menu["settings_x"], menu["y"], "Settings", self.export_zip)
+        self._create_text_button(menu["settings_x"], menu["y"], "Settings", self.open_settings_window)
 
         logos = self.layout["logos"]
         if "me_logo.png" in self.assets:
@@ -377,15 +430,12 @@ class EditorApp:
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
 
-        settings_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
-        settings_menu.add_command(label="Reload Layout", command=self._reload_layout)
-        settings_menu.add_command(label="Open Layout JSON", command=lambda: self._open_path_in_system(LAYOUT_PATH))
-        settings_menu.add_command(label="Open RPC Config", command=lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
-        self.popup_menus["Settings"] = settings_menu
-
     def _create_text_button(self, x, y, text, command):
         item = self.canvas.create_text(x, y, anchor="nw", text=text, fill="#d3d7d5", font=("Segoe UI", 9), tags=(f"button_{text}",))
-        self.canvas.tag_bind(item, "<Button-1>", lambda event, label=text, fallback=command: self._show_top_menu(event, label, fallback))
+        if text == "Settings":
+            self.canvas.tag_bind(item, "<Button-1>", lambda _event, callback=command: callback())
+        else:
+            self.canvas.tag_bind(item, "<Button-1>", lambda event, label=text, fallback=command: self._show_top_menu(event, label, fallback))
         self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#56f4ee"))
         self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
         return item
@@ -421,6 +471,159 @@ class EditorApp:
             os.startfile(str(path))
         except OSError as error:
             messagebox.showerror("Open failed", str(error))
+
+    def open_settings_window(self):
+        if self.settings_window is not None and self.settings_window.winfo_exists():
+            self.settings_window.lift()
+            self.settings_window.focus_force()
+            return
+
+        layout = self.layout["settings_window"]
+        width = layout["width"]
+        height = layout["height"]
+
+        self.settings_window = tk.Toplevel(self.root)
+        self.settings_window.title("Settings")
+        self.settings_window.transient(self.root)
+        self.settings_window.resizable(False, False)
+        self.settings_window.configure(bg="#111111")
+        self.settings_window.overrideredirect(True)
+        self.settings_window.geometry(f"{width}x{height}+{self.root.winfo_x() + layout['offset_x']}+{self.root.winfo_y() + layout['offset_y']}")
+        self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings_window)
+        self.settings_window.bind("<Escape>", lambda _e: self.close_settings_window())
+
+        self.settings_canvas = tk.Canvas(self.settings_window, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        self.settings_canvas.pack()
+        if "settings_bg.png" in self.assets:
+            self.settings_canvas.create_image(0, 0, image=self.assets["settings_bg.png"], anchor="nw")
+        if "settings.png" in self.assets:
+            self.settings_canvas.create_image(layout["title_icon_x"], layout["title_icon_y"], image=self.assets["settings.png"], anchor="nw")
+
+        self.settings_canvas.create_text(layout["title_x"], layout["title_y"], anchor="nw", text="Application Settings", fill="#56f4ee", font=("Segoe UI", 15, "bold"))
+
+        self.settings_vars["auto_reload_layout"] = tk.BooleanVar(value=self.app_settings["auto_reload_layout"])
+        self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
+        self.settings_content = tk.Frame(self.settings_window, bg="#17181c", bd=0, highlightthickness=0)
+        self.settings_canvas.create_window(
+            layout["content_x"],
+            layout["content_y"],
+            anchor="nw",
+            window=self.settings_content,
+            width=layout["content_width"],
+            height=layout["content_height"],
+        )
+
+        self.settings_tabs = {}
+        tabs = [
+            ("General", self._render_general_settings_tab),
+            ("Files", self._render_files_settings_tab),
+            ("Discord", self._render_discord_settings_tab),
+            ("Advanced", self._render_advanced_settings_tab),
+        ]
+        for index, (label, callback) in enumerate(tabs):
+            tab_y = layout["tabs_y"] + index * layout["tab_step_y"]
+            tab_item = self.settings_canvas.create_text(layout["tabs_x"], tab_y, anchor="nw", text=label, fill="#cfd4d8", font=("Segoe UI", 10, "bold"))
+            self.settings_tabs[label] = tab_item
+            self.settings_canvas.tag_bind(tab_item, "<Button-1>", lambda _e, name=label, cb=callback: self._select_settings_tab(name, cb))
+            self.settings_canvas.tag_bind(tab_item, "<Enter>", lambda _e, item_id=tab_item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee"))
+            self.settings_canvas.tag_bind(tab_item, "<Leave>", lambda _e, name=label, item_id=tab_item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee" if getattr(self, "active_settings_tab", "") == name else "#cfd4d8"))
+
+        self._create_settings_button(layout["button_left_x"], layout["button_y"], "Close", self.close_settings_window)
+        self._create_settings_button(layout["button_right_x"], layout["button_y"], "Save Settings", self._save_settings)
+        self._select_settings_tab("General", self._render_general_settings_tab)
+
+    def _create_settings_button(self, x, y, text, command):
+        width = 208
+        height = 44
+        canvas = tk.Canvas(self.settings_window, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        self._set_settings_button_state(canvas, "button_idle.png", text)
+        canvas.bind("<Enter>", lambda _e, widget=canvas: self._set_settings_button_state(widget, "button_onmouse.png", text))
+        canvas.bind("<Leave>", lambda _e, widget=canvas: self._set_settings_button_state(widget, "button_idle.png", text))
+        canvas.bind("<ButtonPress-1>", lambda _e, widget=canvas: self._set_settings_button_state(widget, "button_clicked.png", text))
+        canvas.bind("<ButtonRelease-1>", lambda _e, widget=canvas, action=command: (self._set_settings_button_state(widget, "button_onmouse.png", text), action()))
+        self.settings_canvas.create_window(x, y, anchor="nw", window=canvas, width=width, height=height)
+
+    def _set_settings_button_state(self, canvas, image_name, text):
+        canvas.delete("all")
+        if image_name in self.assets:
+            canvas.create_image(0, 0, image=self.assets[image_name], anchor="nw")
+        canvas.create_text(104, 22, text=text, fill="#f0f0f0", font=("Segoe UI", 9, "bold"))
+
+    def _clear_settings_content(self):
+        if self.settings_content is None:
+            return
+        for child in self.settings_content.winfo_children():
+            child.destroy()
+
+    def _select_settings_tab(self, name, render_callback):
+        self.active_settings_tab = name
+        for tab_name, item_id in self.settings_tabs.items():
+            self.settings_canvas.itemconfigure(item_id, fill="#56f4ee" if tab_name == name else "#cfd4d8")
+        self._clear_settings_content()
+        render_callback()
+
+    def _render_general_settings_tab(self):
+        tk.Label(self.settings_content, text="General", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        row = tk.Frame(self.settings_content, bg="#17181c")
+        row.pack(anchor="w")
+        tk.Checkbutton(row, variable=self.settings_vars["auto_reload_layout"], bg="#17181c", activebackground="#17181c", selectcolor="#17181c", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
+        tk.Label(row, text="Auto reload layout JSON", bg="#17181c", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
+
+    def _render_files_settings_tab(self):
+        tk.Label(self.settings_content, text="Files", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        tk.Label(self.settings_content, text="Open editable config files for the editor.", bg="#17181c", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
+        self._create_inline_settings_button(self.settings_content, "Open Layout JSON", lambda: self._open_path_in_system(LAYOUT_PATH))
+        self._create_inline_settings_button(self.settings_content, "Open App Settings", lambda: self._open_path_in_system(APP_SETTINGS_PATH))
+
+    def _render_discord_settings_tab(self):
+        tk.Label(self.settings_content, text="Discord", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        row = tk.Frame(self.settings_content, bg="#17181c")
+        row.pack(anchor="w")
+        tk.Checkbutton(row, variable=self.settings_vars["discord_rpc_enabled"], bg="#17181c", activebackground="#17181c", selectcolor="#17181c", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
+        tk.Label(row, text="Enable Discord RPC", bg="#17181c", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
+        self._create_inline_settings_button(self.settings_content, "Open RPC Config", lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
+
+    def _render_advanced_settings_tab(self):
+        tk.Label(self.settings_content, text="Advanced", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        tk.Label(self.settings_content, text="Runtime actions and maintenance tools.", bg="#17181c", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
+        self._create_inline_settings_button(self.settings_content, "Reload Layout", self._reload_layout)
+
+    def _create_inline_settings_button(self, parent, text, command):
+        button = tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg="#23262c",
+            fg="#f0f0f0",
+            activebackground="#2f343b",
+            activeforeground="#56f4ee",
+            relief="flat",
+            bd=0,
+            padx=12,
+            pady=6,
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
+        )
+        button.pack(anchor="w", pady=(0, 10))
+
+    def _save_settings(self):
+        self.app_settings["auto_reload_layout"] = bool(self.settings_vars["auto_reload_layout"].get())
+        self.app_settings["discord_rpc_enabled"] = bool(self.settings_vars["discord_rpc_enabled"].get())
+        APP_SETTINGS_PATH.write_text(json.dumps(self.app_settings, indent=2), encoding="utf-8")
+        self.discord.enabled = self.app_settings["discord_rpc_enabled"]
+        if not self.discord.enabled:
+            self.discord.clear()
+            self.discord.connected = False
+            self.discord.rpc = None
+        else:
+            self._update_presence()
+        self.close_settings_window()
+
+    def close_settings_window(self):
+        if self.settings_window is not None and self.settings_window.winfo_exists():
+            self.settings_window.destroy()
+        self.settings_window = None
+        self.settings_canvas = None
 
     @staticmethod
     def _deep_update(target, source):
@@ -482,6 +685,17 @@ class EditorApp:
         for key in ("open_y", "min_y", "close_y"):
             layout["buttons"][key] = max(0, min(int(layout["buttons"].get(key, DEFAULT_LAYOUT["buttons"][key])), height - 20))
 
+        settings = layout["settings_window"]
+        default_settings = DEFAULT_LAYOUT["settings_window"]
+        settings["width"] = max(320, int(settings.get("width", default_settings["width"])))
+        settings["height"] = max(280, int(settings.get("height", default_settings["height"])))
+        settings["offset_x"] = int(settings.get("offset_x", default_settings["offset_x"]))
+        settings["offset_y"] = int(settings.get("offset_y", default_settings["offset_y"]))
+        for key in ("title_icon_x", "title_icon_y", "title_x", "title_y", "tabs_x", "tabs_y", "content_x", "content_y", "button_left_x", "button_right_x", "button_y"):
+            settings[key] = int(settings.get(key, default_settings[key]))
+        for key in ("tabs_width", "tabs_height", "tab_step_y", "content_width", "content_height"):
+            settings[key] = max(10, int(settings.get(key, default_settings[key])))
+
         return layout
 
     def _get_layout_mtime(self):
@@ -492,7 +706,7 @@ class EditorApp:
 
     def _watch_layout_file(self):
         current_mtime = self._get_layout_mtime()
-        if current_mtime != self.layout_mtime:
+        if self.app_settings.get("auto_reload_layout", True) and current_mtime != self.layout_mtime:
             self.layout_mtime = current_mtime
             self._reload_layout()
         self.root.after(500, self._watch_layout_file)
@@ -665,6 +879,7 @@ class EditorApp:
         self.root.after(15000, self._presence_loop)
 
     def on_close(self):
+        self.close_settings_window()
         self.discord.clear()
         self.root.destroy()
 

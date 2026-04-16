@@ -57,5 +57,27 @@
     "mode_y": 955,
     "cursor_x": 890,
     "cursor_y": 955
+  },
+  "settings_window": {
+    "width": 512,
+    "height": 512,
+    "offset_x": 100,
+    "offset_y": 80,
+    "title_icon_x": 28,
+    "title_icon_y": 26,
+    "title_x": 154,
+    "title_y": 50,
+    "tabs_x": 28,
+    "tabs_y": 120,
+    "tabs_width": 146,
+    "tabs_height": 300,
+    "tab_step_y": 50,
+    "content_x": 196,
+    "content_y": 126,
+    "content_width": 286,
+    "content_height": 290,
+    "button_left_x": 196,
+    "button_right_x": 294,
+    "button_y": 430
   }
 }
