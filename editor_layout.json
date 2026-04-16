@@ -1,0 +1,55 @@
+{
+  "window": {
+    "width": 1919,
+    "height": 1079,
+    "drag_top_height": 52
+  },
+  "menu": {
+    "project_x": 240,
+    "file_x": 283,
+    "settings_x": 306,
+    "y": 79
+  },
+  "logos": {
+    "main_x": 878,
+    "main_y": 74,
+    "side_x": 142,
+    "side_y": 73
+  },
+  "buttons": {
+    "open_x": 99992,
+    "open_y": 101,
+    "min_x": 1782,
+    "min_y": 91,
+    "close_x": 1797,
+    "close_y": 76
+  },
+  "header": {
+    "x": 239,
+    "y": 100
+  },
+  "editor": {
+    "x": 180,
+    "y": 134,
+    "width": 1467,
+    "height": 815
+  },
+  "line_numbers": {
+    "x": 148,
+    "y": 134,
+    "width": 30,
+    "height": 815
+  },
+  "files": {
+    "x": 1651,
+    "y": 101,
+    "width": 166,
+    "height": 848
+  },
+  "status": {
+    "mode_x": 150,
+    "mode_y": 955,
+    "cursor_x": 890,
+    "cursor_y": 955
+  }
+}
