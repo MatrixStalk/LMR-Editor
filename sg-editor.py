@@ -296,6 +296,8 @@ class EditorApp:
         self.settings_action_widgets = []
         self.file_tab_widgets = []
         self.file_tab_window_ids = []
+        self.file_tab_item_ids = []
+        self.file_tab_tags = []
         self.file_tab_render_job = None
         self.hovered_tree_item = None
         self.last_line_count = 0
@@ -426,13 +428,21 @@ class EditorApp:
 
         width = max(1, int(width))
         height = max(1, int(height))
+        cache_key = ("exact", name, width, height)
+        cached = self.resized_asset_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         if Image is not None and ImageTk is not None:
             with Image.open(path) as source:
                 resized = source.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
-                return ImageTk.PhotoImage(resized)
+                image = ImageTk.PhotoImage(resized)
+                self.resized_asset_cache[cache_key] = image
+                return image
 
-        return self._resize_image_exact(tk.PhotoImage(file=str(path)), width, height)
+        image = self._resize_image_exact(tk.PhotoImage(file=str(path)), width, height)
+        self.resized_asset_cache[cache_key] = image
+        return image
 
     def _load_asset_exact_alpha(self, name: str, width: int, height: int, alpha: float):
         path = ASSETS_DIR / name
@@ -442,6 +452,10 @@ class EditorApp:
         width = max(1, int(width))
         height = max(1, int(height))
         alpha = max(0.0, min(float(alpha), 1.0))
+        cache_key = ("alpha", name, width, height, round(alpha, 4))
+        cached = self.resized_asset_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         if Image is not None and ImageTk is not None:
             with Image.open(path) as source:
@@ -450,9 +464,13 @@ class EditorApp:
                     r, g, b, a = resized.split()
                     a = a.point(lambda value: int(value * alpha))
                     resized = Image.merge("RGBA", (r, g, b, a))
-                return ImageTk.PhotoImage(resized)
+                image = ImageTk.PhotoImage(resized)
+                self.resized_asset_cache[cache_key] = image
+                return image
 
-        return self._load_asset_exact(name, width, height)
+        image = self._load_asset_exact(name, width, height)
+        self.resized_asset_cache[cache_key] = image
+        return image
 
     def _configure_tree_style(self):
         style = ttk.Style(self.root)
@@ -641,11 +659,23 @@ class EditorApp:
     def _clear_file_tabs(self):
         self.file_tab_render_job = None
         if self.canvas is not None:
+            for tag in self.file_tab_tags:
+                try:
+                    self.canvas.delete(tag)
+                except tk.TclError:
+                    pass
+            for item_id in self.file_tab_item_ids:
+                try:
+                    self.canvas.delete(item_id)
+                except tk.TclError:
+                    pass
             for item_id in self.file_tab_window_ids:
                 try:
                     self.canvas.delete(item_id)
                 except tk.TclError:
                     pass
+        self.file_tab_tags.clear()
+        self.file_tab_item_ids.clear()
         self.file_tab_window_ids.clear()
         for widget in self.file_tab_widgets:
             try:
@@ -675,15 +705,13 @@ class EditorApp:
         y = layout["y"]
         gap = layout["gap"]
         height = layout["height"]
-        for path in self.open_files:
-            tab = self._create_file_tab_widget(path, height)
-            total_width = tab.winfo_reqwidth()
-            self.file_tab_widgets.append(tab)
-            item_id = self.canvas.create_window(x, y, anchor="nw", window=tab, width=total_width, height=height)
-            self.file_tab_window_ids.append(item_id)
+        for index, path in enumerate(self.open_files):
+            total_width, item_ids = self._create_file_tab_items(path, x, y, height, index)
+            self.file_tab_item_ids.extend(item_ids)
+            self.file_tab_tags.extend((f"filetab_{index}_body", f"filetab_{index}_close"))
             x += total_width + gap
 
-    def _create_file_tab_widget(self, path: Path, height: int):
+    def _create_file_tab_items(self, path: Path, x: int, y: int, height: int, index: int):
         layout = self.layout["file_tabs"]
         label = f"* {path.name}" if self._is_file_dirty(path) else path.name
         state = "selected" if path == self.current_file else "inactive"
@@ -694,52 +722,59 @@ class EditorApp:
         close_reserved = layout["close_padding_right"] + 12
         estimated_middle = max(layout["middle_min_width"], len(label) * 8 + layout["text_padding_x"] * 2 + close_reserved)
         total_width = left_width + estimated_middle + right_width
-        widget = tk.Canvas(self.root, width=total_width, height=height, bg=PANEL_BACKGROUND, highlightthickness=0, bd=0)
-        widget._images = {}  # type: ignore[attr-defined]
+        item_ids = []
+        tag_base = f"filetab_{index}"
+        tab_tag = f"{tag_base}_body"
+        close_tag = f"{tag_base}_close"
 
-        def build_state(state_name: str):
-            left = self._load_asset_exact(f"tab_{state_name}_l.png", left_width, height)
-            middle = self._load_asset_exact(f"tab_{state_name}_m.png", estimated_middle, height)
-            right = self._load_asset_exact(f"tab_{state_name}_r.png", right_width, height)
-            if left is None or middle is None or right is None:
-                return
-            widget._images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
-
-        for state_name in ("inactive", "onmouse", "selected"):
-            build_state(state_name)
+        def state_assets(state_name: str):
+            return (
+                self._load_asset_exact(f"tab_{state_name}_l.png", left_width, height),
+                self._load_asset_exact(f"tab_{state_name}_m.png", estimated_middle, height),
+                self._load_asset_exact(f"tab_{state_name}_r.png", right_width, height),
+            )
 
         def draw_state(state_name: str):
-            images = widget._images.get(state_name)  # type: ignore[attr-defined]
-            if images is None:
-                return
-            left, middle, right = images
+            self.canvas.delete(tab_tag)
+            self.canvas.delete(close_tag)
+            item_ids.clear()
+            left, middle, right = state_assets(state_name)
             text_color = layout["active_text_color"] if path == self.current_file else layout["inactive_text_color"]
             close_color = layout["close_color_active"] if path == self.current_file else layout["close_color_inactive"]
-            widget.delete("all")
-            widget.create_rectangle(0, 0, total_width, height, fill=PANEL_BACKGROUND, outline=PANEL_BACKGROUND)
-            widget.create_image(0, 0, image=left, anchor="nw")
-            widget.create_image(left_width, 0, image=middle, anchor="nw")
-            widget.create_image(left_width + estimated_middle, 0, image=right, anchor="nw")
-            widget.create_text((total_width - close_reserved) // 2, height // 2, text=label, fill=text_color, font=("Cascadia Mono", 9, "bold"))
-            close_item = widget.create_text(
-                total_width - layout["close_padding_right"],
-                height // 2,
-                text="x",
-                fill=close_color,
-                font=("Cascadia Mono", 9, "bold"),
+            item_ids.append(self.canvas.create_rectangle(x, y, x + total_width, y + height, fill=PANEL_BACKGROUND, outline=PANEL_BACKGROUND, tags=(tab_tag,)))
+            if left is not None:
+                item_ids.append(self.canvas.create_image(x, y, image=left, anchor="nw", tags=(tab_tag,)))
+            if middle is not None:
+                item_ids.append(self.canvas.create_image(x + left_width, y, image=middle, anchor="nw", tags=(tab_tag,)))
+            if right is not None:
+                item_ids.append(self.canvas.create_image(x + left_width + estimated_middle, y, image=right, anchor="nw", tags=(tab_tag,)))
+            item_ids.append(
+                self.canvas.create_text(
+                    x + ((total_width - close_reserved) // 2),
+                    y + (height // 2),
+                    text=label,
+                    fill=text_color,
+                    font=("Cascadia Mono", 9, "bold"),
+                    tags=(tab_tag,),
+                )
             )
-            widget.tag_bind(close_item, "<Enter>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "onmouse"))
-            def handle_close(_event=None, p=path):
-                self.close_file_tab(p)
-                return "break"
-            widget.tag_bind(close_item, "<Button-1>", handle_close)
+            item_ids.append(
+                self.canvas.create_text(
+                    x + total_width - layout["close_padding_right"],
+                    y + (height // 2),
+                    text="x",
+                    fill=close_color,
+                    font=("Cascadia Mono", 9, "bold"),
+                    tags=(close_tag,),
+                )
+            )
+            self.canvas.tag_bind(tab_tag, "<Enter>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "onmouse"))
+            self.canvas.tag_bind(tab_tag, "<Leave>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "inactive"))
+            self.canvas.tag_bind(tab_tag, "<Button-1>", lambda _e, p=path: self.switch_to_file(p))
+            self.canvas.tag_bind(close_tag, "<Button-1>", lambda _e, p=path: self.close_file_tab(p))
 
         draw_state(state)
-        widget.bind("<Enter>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "onmouse"))
-        widget.bind("<Leave>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "inactive"))
-        widget.bind("<Button-1>", lambda _e, p=path: self.switch_to_file(p))
-        return widget
-        return item
+        return total_width, item_ids
 
     def _create_image_button(self, x, y, idle_name, hover_name, pressed_name, command):
         item = self.canvas.create_image(x, y, anchor="nw", image=self.assets.get(idle_name))
