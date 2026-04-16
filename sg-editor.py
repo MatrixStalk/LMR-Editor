@@ -96,6 +96,7 @@ DEFAULT_LAYOUT = {
     "settings_window": {
         "width": 512,
         "height": 512,
+        "alpha": 1.0,
         "offset_x": 100,
         "offset_y": 80,
         "drag_x": 18,
@@ -494,6 +495,10 @@ class EditorApp:
         self.settings_window.resizable(False, False)
         self.settings_window.configure(bg="#111111")
         self.settings_window.overrideredirect(True)
+        try:
+            self.settings_window.wm_attributes("-alpha", layout["alpha"])
+        except tk.TclError:
+            pass
         self.settings_window.geometry(f"{width}x{height}+{self.root.winfo_x() + layout['offset_x']}+{self.root.winfo_y() + layout['offset_y']}")
         self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings_window)
         self.settings_window.bind("<Escape>", lambda _e: self.close_settings_window())
@@ -716,6 +721,7 @@ class EditorApp:
         default_settings = DEFAULT_LAYOUT["settings_window"]
         settings["width"] = max(320, int(settings.get("width", default_settings["width"])))
         settings["height"] = max(280, int(settings.get("height", default_settings["height"])))
+        settings["alpha"] = max(0.1, min(float(settings.get("alpha", default_settings["alpha"])), 1.0))
         settings["offset_x"] = int(settings.get("offset_x", default_settings["offset_x"]))
         settings["offset_y"] = int(settings.get("offset_y", default_settings["offset_y"]))
         for key in ("title_icon_x", "title_icon_y", "title_x", "title_y", "tabs_x", "tabs_y", "content_x", "content_y", "button_left_x", "button_right_x", "button_y"):
