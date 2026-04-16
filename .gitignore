@@ -1,4 +1,5 @@
 ﻿/__pycache__
+/build
 
 README.md
 
@@ -8,3 +9,7 @@ README.md
 *.webp
 *.dll
 *.exe
+
+
+*.toc
+*.spec

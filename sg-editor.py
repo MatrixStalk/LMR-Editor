@@ -5,6 +5,7 @@ import struct
 import time
 import tkinter as tk
 import webbrowser
+import sys
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -20,7 +21,7 @@ except ImportError:
     Presence = None
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 ASSETS_DIR = BASE_DIR / "assets"
 DISCORD_RPC_PATH = BASE_DIR / "discordrpc"
 LAYOUT_PATH = BASE_DIR / "editor_layout.json"
@@ -304,6 +305,7 @@ class EditorApp:
         self.editor_context_menu = None
         self.tree_item_paths: dict[str, Path] = {}
         self.settings_window = None
+        self.confirm_window = None
         self.settings_canvas = None
         self.settings_vars: dict[str, tk.BooleanVar] = {}
         self.settings_drag_offset_x = 0
@@ -387,6 +389,15 @@ class EditorApp:
             "tab_selected_l.png",
             "tab_selected_m.png",
             "tab_selected_r.png",
+            "window_b.png",
+            "window_back.png",
+            "window_l.png",
+            "window_lb.png",
+            "window_lt.png",
+            "window_r.png",
+            "window_rb.png",
+            "window_rt.png",
+            "window_t.png",
         ):
             path = ASSETS_DIR / name
             if path.exists():
@@ -1266,6 +1277,149 @@ class EditorApp:
         self.canvas.tag_bind(item, "<Button-1>", lambda _e: command())
         return item
 
+    def _create_composite_button(self, parent_window, parent_canvas, x, y, label, middle_width, button_height, action, alpha=1.0):
+        left_idle = self.assets.get("button_border_left_idle.png")
+        right_idle = self.assets.get("button_border_right_idle.png")
+        if left_idle is None or right_idle is None:
+            return None, None
+
+        left_width = max(1, int(round(left_idle.width() * (button_height / max(1, left_idle.height())))))
+        right_width = max(1, int(round(right_idle.width() * (button_height / max(1, right_idle.height())))))
+        height = max(1, button_height)
+        total_width = left_width + middle_width + right_width
+        widget = tk.Canvas(parent_window, width=total_width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
+        widget._state_images = {}  # type: ignore[attr-defined]
+
+        def build_state(state_name: str):
+            left = self._load_asset_exact_alpha(f"button_border_left_{state_name}.png", left_width, height, alpha)
+            middle = self._load_asset_exact_alpha(f"button_middle_{state_name}.png", middle_width, height, alpha)
+            right = self._load_asset_exact_alpha(f"button_border_right_{state_name}.png", right_width, height, alpha)
+            if left is None or middle is None or right is None:
+                return
+            widget._state_images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
+
+        for state in ("idle", "onmouse", "clicked"):
+            build_state(state)
+
+        def draw_state(state_name: str):
+            state_images = widget._state_images.get(state_name)  # type: ignore[attr-defined]
+            if state_images is None:
+                return
+            left, middle, right = state_images
+            widget.delete("all")
+            widget.create_image(0, 0, image=left, anchor="nw")
+            widget.create_image(left_width, 0, image=middle, anchor="nw")
+            widget.create_image(left_width + middle_width, 0, image=right, anchor="nw")
+            widget.create_text(total_width // 2, height // 2, text=label, fill="#000000", font=("Cascadia Mono", 9, "bold"))
+
+        draw_state("idle")
+        widget.bind("<Enter>", lambda _e: draw_state("onmouse"))
+        widget.bind("<Leave>", lambda _e: draw_state("idle"))
+        widget.bind("<ButtonPress-1>", lambda _e: draw_state("clicked"))
+        widget.bind("<ButtonRelease-1>", lambda _e: (draw_state("onmouse"), action()))
+        window_item = parent_canvas.create_window(x, y, anchor="nw", window=widget, width=total_width, height=height)
+        return widget, window_item
+
+    def _draw_window_frame(self, canvas, width, height):
+        edge = 22
+        background = self._load_asset_exact("window_back.png", max(1, width - edge * 2), max(1, height - edge * 2))
+        if background is not None:
+            canvas.create_image(edge, edge, image=background, anchor="nw")
+            if not hasattr(canvas, "_frame_images"):
+                canvas._frame_images = []  # type: ignore[attr-defined]
+            canvas._frame_images.append(background)  # type: ignore[attr-defined]
+        else:
+            canvas.create_rectangle(edge, edge, width - edge, height - edge, fill="#101010", outline="")
+
+        pieces = [
+            ("window_lt.png", 0, 0, edge, edge),
+            ("window_rt.png", width - edge, 0, edge, edge),
+            ("window_lb.png", 0, height - edge, edge, edge),
+            ("window_rb.png", width - edge, height - edge, edge, edge),
+            ("window_t.png", edge, 0, max(1, width - edge * 2), edge),
+            ("window_b.png", edge, height - edge, max(1, width - edge * 2), edge),
+            ("window_l.png", 0, edge, edge, max(1, height - edge * 2)),
+            ("window_r.png", width - edge, edge, edge, max(1, height - edge * 2)),
+        ]
+
+        for name, x, y, w, h in pieces:
+            image = self._load_asset_exact(name, w, h)
+            if image is None:
+                continue
+            canvas.create_image(x, y, image=image, anchor="nw")
+            if not hasattr(canvas, "_frame_images"):
+                canvas._frame_images = []  # type: ignore[attr-defined]
+            canvas._frame_images.append(image)  # type: ignore[attr-defined]
+
+    def _show_unsaved_warning(self, title: str, message: str) -> bool:
+        if self.confirm_window is not None and self.confirm_window.winfo_exists():
+            try:
+                self.confirm_window.destroy()
+            except tk.TclError:
+                pass
+        result = {"exit": False}
+        width = 420
+        height = 210
+        parent_window = self.settings_window if self.settings_window is not None and self.settings_window.winfo_exists() else self.root
+
+        window = tk.Toplevel(parent_window)
+        self.confirm_window = window
+        window.transient(parent_window)
+        window.resizable(False, False)
+        window.configure(bg=TRANSPARENT_COLOR)
+        window.overrideredirect(True)
+        try:
+            window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
+        except tk.TclError:
+            pass
+        try:
+            window.wm_attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        window.geometry(
+            f"{width}x{height}+{parent_window.winfo_x() + max(0, (parent_window.winfo_width() - width) // 2)}+{parent_window.winfo_y() + max(0, (parent_window.winfo_height() - height) // 2)}"
+        )
+        window.bind("<Escape>", lambda _e: close_dialog(False))
+        canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
+        canvas.pack()
+        self._draw_window_frame(canvas, width, height)
+        canvas.create_text(width // 2, 42, text=title, anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        canvas.create_text(
+            width // 2,
+            86,
+            text=message,
+            anchor="n",
+            fill="#d7d9d7",
+            font=("Cascadia Mono", 9, "bold"),
+            justify="center",
+            width=width - 56,
+        )
+
+        def close_dialog(should_exit: bool):
+            result["exit"] = should_exit
+            if self.confirm_window is not None and self.confirm_window.winfo_exists():
+                try:
+                    self.confirm_window.grab_release()
+                except tk.TclError:
+                    pass
+                self.confirm_window.destroy()
+            self.confirm_window = None
+            try:
+                parent_window.focus_force()
+            except tk.TclError:
+                pass
+            if parent_window is self.root:
+                self._focus_editor_widget()
+
+        self._create_composite_button(window, canvas, 90, 150, "Return", 80, 24, lambda: close_dialog(False))
+        self._create_composite_button(window, canvas, 240, 150, "Exit", 80, 24, lambda: close_dialog(True))
+        window.grab_set()
+        window.deiconify()
+        window.lift()
+        window.focus_force()
+        window.wait_window()
+        return bool(result["exit"])
+
     def _bind_shortcuts(self):
         self.root.bind("<Escape>", lambda _e: self.on_close())
         self.root.bind_all("<KeyPress>", self._handle_shortcut_keypress)
@@ -1631,47 +1785,20 @@ class EditorApp:
         middle_width = int(button_cfg.get("width", 100))
         button_height = int(button_cfg.get("height", 22))
         button_alpha = float(button_cfg.get("alpha", 1.0))
-        left_idle = self.assets.get("button_border_left_idle.png")
-        right_idle = self.assets.get("button_border_right_idle.png")
-        if left_idle is None or right_idle is None:
+        widget, window_item = self._create_composite_button(
+            self.settings_window,
+            self.settings_canvas,
+            x,
+            y,
+            label,
+            middle_width,
+            button_height,
+            action,
+            alpha=button_alpha,
+        )
+        if widget is None or window_item is None:
             return
-
-        left_width = max(1, int(round(left_idle.width() * (button_height / max(1, left_idle.height())))))
-        right_width = max(1, int(round(right_idle.width() * (button_height / max(1, right_idle.height())))))
-        height = max(1, button_height)
-        total_width = left_width + middle_width + right_width
-        widget = tk.Canvas(self.settings_window, width=total_width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
-        widget._state_images = {}  # type: ignore[attr-defined]
-
-        def build_state(state_name: str):
-            left = self._load_asset_exact_alpha(f"button_border_left_{state_name}.png", left_width, height, button_alpha)
-            middle = self._load_asset_exact_alpha(f"button_middle_{state_name}.png", middle_width, height, button_alpha)
-            right = self._load_asset_exact_alpha(f"button_border_right_{state_name}.png", right_width, height, button_alpha)
-            if left is None or middle is None or right is None:
-                return
-            widget._state_images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
-
-        for state in ("idle", "onmouse", "clicked"):
-            build_state(state)
-
-        def draw_state(state_name: str):
-            state_images = widget._state_images.get(state_name)  # type: ignore[attr-defined]
-            if state_images is None:
-                return
-            left, middle, right = state_images
-            widget.delete("all")
-            widget.create_image(0, 0, image=left, anchor="nw")
-            widget.create_image(left_width, 0, image=middle, anchor="nw")
-            widget.create_image(left_width + middle_width, 0, image=right, anchor="nw")
-            widget.create_text(total_width // 2, height // 2, text=label, fill="#000000", font=("Cascadia Mono", 9, "bold"))
-
-        draw_state("idle")
-        widget.bind("<Enter>", lambda _e: draw_state("onmouse"))
-        widget.bind("<Leave>", lambda _e: draw_state("idle"))
-        widget.bind("<ButtonPress-1>", lambda _e: draw_state("clicked"))
-        widget.bind("<ButtonRelease-1>", lambda _e: (draw_state("onmouse"), action()))
         self.settings_action_widgets.append(widget)
-        window_item = self.settings_canvas.create_window(x, y, anchor="nw", window=widget, width=total_width, height=height)
         self.settings_content_items.append(window_item)
 
     def _render_info_settings_tab(self):
@@ -2106,6 +2233,13 @@ class EditorApp:
     def close_file_tab(self, path: Path):
         if path not in self.open_files:
             return
+        if self._is_file_dirty(path):
+            should_close = self._show_unsaved_warning(
+                "Unsaved File",
+                f"{path.name} has unsaved changes.\nExit this file without saving?",
+            )
+            if not should_close:
+                return
         was_current = path == self.current_file
         current_index = self.open_files.index(path)
         self.open_files.remove(path)
@@ -2130,15 +2264,36 @@ class EditorApp:
             self._request_render_file_tabs()
 
     def save_current_file(self):
-        if self.current_file is None:
-            return
         content = self._get_editor_content()
+        if self.current_file is None:
+            if not content.strip():
+                self._focus_editor_widget()
+                return
+            destination = filedialog.asksaveasfilename(
+                title="Save file as",
+                initialdir=str(self.project_dir) if self.project_dir else str(BASE_DIR),
+                defaultextension=".rpy",
+                filetypes=[
+                    ("Ren'Py script", "*.rpy"),
+                    ("YAML file", "*.yaml"),
+                    ("Text file", "*.txt"),
+                ],
+            )
+            if not destination:
+                self._focus_editor_widget()
+                return
+            path = Path(destination)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.current_file = path
+            if path not in self.open_files:
+                self.open_files.append(path)
         self.file_buffers[self.current_file] = content
         self.current_file.write_text(content, encoding="utf-8")
         self.saved_file_snapshots[self.current_file] = content
         self.dirty_files.discard(self.current_file)
         self._update_status()
         self._request_render_file_tabs()
+        self._focus_editor_widget()
 
     def export_zip(self):
         if not self.project_dir:
@@ -2234,6 +2389,15 @@ class EditorApp:
         self.root.after(15000, self._presence_loop)
 
     def on_close(self):
+        unsaved_files = [path for path in self.open_files if self._is_file_dirty(path)]
+        if unsaved_files:
+            if len(unsaved_files) == 1:
+                message = f"{unsaved_files[0].name} has unsaved changes.\nExit the editor without saving?"
+            else:
+                message = f"There are {len(unsaved_files)} unsaved files.\nExit the editor without saving?"
+            should_exit = self._show_unsaved_warning("Unsaved Changes", message)
+            if not should_exit:
+                return
         self.close_settings_window()
         self.discord.clear()
         if self.line_numbers_refresh_job is not None:
@@ -2252,6 +2416,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
