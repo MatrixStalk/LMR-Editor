@@ -8,6 +8,12 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
+
+try:
     from pypresence import Presence
 except ImportError:
     Presence = None
@@ -99,10 +105,16 @@ DEFAULT_LAYOUT = {
         "alpha": 1.0,
         "offset_x": 100,
         "offset_y": 80,
+        "bg_x": 0,
+        "bg_y": 0,
+        "bg_width": 512,
+        "bg_height": 512,
         "drag_x": 18,
         "drag_y": 10,
         "drag_width": 476,
         "drag_height": 56,
+        "close_x": 474,
+        "close_y": 10,
         "title_icon_x": 28,
         "title_icon_y": 26,
         "title_x": 154,
@@ -230,6 +242,9 @@ class EditorApp:
         self.settings_vars: dict[str, tk.BooleanVar] = {}
         self.settings_drag_offset_x = 0
         self.settings_drag_offset_y = 0
+        self.settings_tab_items = {}
+        self.settings_content_items = []
+        self.settings_window_bg = None
 
         self._build_window()
         self._build_popup_menus()
@@ -255,6 +270,9 @@ class EditorApp:
             "button_clicked.png",
             "button_idle.png",
             "button_onmouse.png",
+            "checkbox_off.png",
+            "checkbox_on.png",
+            "checkbox_onmouse.png",
             "exit_btn_clicked.png",
             "exit_btn_idle.png",
             "exit_btn_onmouse.png",
@@ -262,31 +280,52 @@ class EditorApp:
             "hide_btn_clicked.png",
             "hide_btn_idle.png",
             "hide_btn_onmouse.png",
-            "file_choose.png",
-            "file_choose_last.png",
             "folder.png",
+            "lunar_avatar.png",
             "me_logo.png",
+            "py_logo.png",
             "settings.png",
             "settings_bg.png",
+            "sg_logo.png",
             "sgme_logo.png",
         ):
             path = ASSETS_DIR / name
             if path.exists():
-                image = tk.PhotoImage(file=str(path))
+                image = self._load_image_asset(path)
                 if name in {"folder.png", "files.png"}:
                     image = self._fit_icon(image, 24, 24)
                 elif name in {"button_clicked.png", "button_idle.png", "button_onmouse.png"}:
                     image = self._fit_icon(image, 208, 44)
+                elif name in {"checkbox_off.png", "checkbox_on.png", "checkbox_onmouse.png"}:
+                    image = self._fit_icon(image, 18, 18)
                 elif name == "settings.png":
                     image = self._fit_icon(image, 96, 96)
+                elif name == "lunar_avatar.png":
+                    image = self._fit_icon(image, 110, 136)
+                elif name == "py_logo.png":
+                    image = self._fit_icon(image, 96, 54)
+                elif name == "sg_logo.png":
+                    image = self._fit_icon(image, 96, 100)
                 assets[name] = image
         return assets
 
-    def _fit_icon(self, image: tk.PhotoImage, max_width: int, max_height: int):
+    def _load_image_asset(self, path: Path):
+        if Image is not None and ImageTk is not None:
+            with Image.open(path) as source:
+                return ImageTk.PhotoImage(source.convert("RGBA"))
+        return tk.PhotoImage(file=str(path))
+
+    def _fit_icon(self, image, max_width: int, max_height: int):
         width = image.width()
         height = image.height()
         if width <= max_width and height <= max_height:
             return image
+
+        if Image is not None and ImageTk is not None:
+            pil_image = ImageTk.getimage(image)
+            resized = pil_image.copy()
+            resized.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(resized)
 
         scale_x = max(1, (width + max_width - 1) // max_width)
         scale_y = max(1, (height + max_height - 1) // max_height)
@@ -357,7 +396,6 @@ class EditorApp:
             self.canvas.tag_bind(logo_side, "<B1-Motion>", self._drag_window)
 
         buttons = self.layout["buttons"]
-        self._create_image_button(buttons["open_x"], buttons["open_y"], "file_choose.png", "file_choose_last.png", "file_choose_last.png", self.open_project)
         self._create_image_button(buttons["min_x"], buttons["min_y"], "hide_btn_idle.png", "hide_btn_onmouse.png", "hide_btn_clicked.png", self._minimize_window)
         self._create_image_button(buttons["close_x"], buttons["close_y"], "exit_btn_idle.png", "exit_btn_onmouse.png", "exit_btn_clicked.png", self.on_close)
 
@@ -481,6 +519,14 @@ class EditorApp:
 
     def open_settings_window(self):
         if self.settings_window is not None and self.settings_window.winfo_exists():
+            try:
+                self.settings_window.deiconify()
+            except tk.TclError:
+                pass
+            try:
+                self.settings_window.wm_attributes("-topmost", True)
+            except tk.TclError:
+                pass
             self.settings_window.lift()
             self.settings_window.focus_force()
             return
@@ -493,8 +539,12 @@ class EditorApp:
         self.settings_window.title("Settings")
         self.settings_window.transient(self.root)
         self.settings_window.resizable(False, False)
-        self.settings_window.configure(bg="#111111")
+        self.settings_window.configure(bg=TRANSPARENT_COLOR)
         self.settings_window.overrideredirect(True)
+        try:
+            self.settings_window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
+        except tk.TclError:
+            pass
         try:
             self.settings_window.wm_attributes("-alpha", layout["alpha"])
         except tk.TclError:
@@ -502,11 +552,21 @@ class EditorApp:
         self.settings_window.geometry(f"{width}x{height}+{self.root.winfo_x() + layout['offset_x']}+{self.root.winfo_y() + layout['offset_y']}")
         self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings_window)
         self.settings_window.bind("<Escape>", lambda _e: self.close_settings_window())
+        self.settings_window.deiconify()
+        self.settings_window.lift()
+        try:
+            self.settings_window.wm_attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        self.settings_window.grab_set()
+        self.settings_window.focus_force()
 
-        self.settings_canvas = tk.Canvas(self.settings_window, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        self.settings_canvas = tk.Canvas(self.settings_window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         self.settings_canvas.pack()
         if "settings_bg.png" in self.assets:
-            self.settings_canvas.create_image(0, 0, image=self.assets["settings_bg.png"], anchor="nw")
+            settings_bg = self._fit_icon(self.assets["settings_bg.png"], layout["bg_width"], layout["bg_height"])
+            self.settings_window_bg = settings_bg
+            self.settings_canvas.create_image(layout["bg_x"], layout["bg_y"], image=self.settings_window_bg, anchor="nw")
         if "settings.png" in self.assets:
             self.settings_canvas.create_image(layout["title_icon_x"], layout["title_icon_y"], image=self.assets["settings.png"], anchor="nw")
 
@@ -522,49 +582,64 @@ class EditorApp:
         self.settings_canvas.tag_bind("settings_drag_zone", "<ButtonPress-1>", self._start_settings_drag)
         self.settings_canvas.tag_bind("settings_drag_zone", "<B1-Motion>", self._drag_settings_window)
 
-        self.settings_canvas.create_text(layout["title_x"], layout["title_y"], anchor="nw", text="Application Settings", fill="#56f4ee", font=("Segoe UI", 15, "bold"))
+        self._create_settings_icon_button(
+            layout["close_x"],
+            layout["close_y"],
+            "exit_btn_idle.png",
+            "exit_btn_onmouse.png",
+            "exit_btn_clicked.png",
+            self.close_settings_window,
+        )
+
+        self.settings_canvas.create_text(
+            layout["title_x"],
+            layout["title_y"],
+            anchor="nw",
+            text="Application Settings",
+            fill="#56f4ee",
+            font=("Cascadia Mono", 10, "bold"),
+        )
 
         self.settings_vars["auto_reload_layout"] = tk.BooleanVar(value=self.app_settings["auto_reload_layout"])
         self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
-        self.settings_content = tk.Frame(self.settings_window, bg="#111111", bd=0, highlightthickness=0)
-        self.settings_canvas.create_window(
-            layout["content_x"],
-            layout["content_y"],
-            anchor="nw",
-            window=self.settings_content,
-            width=layout["content_width"],
-            height=layout["content_height"],
-        )
 
-        self.settings_tabs = {}
         tabs = [
-            ("General", self._render_general_settings_tab),
-            ("Files", self._render_files_settings_tab),
-            ("Discord", self._render_discord_settings_tab),
-            ("Advanced", self._render_advanced_settings_tab),
+            ("Info", self._render_info_settings_tab),
+            ("Discord RPC", self._render_discord_settings_tab),
+            ("Editor Setting's", self._render_editor_settings_tab),
+            ("Preferences", self._render_preferences_settings_tab),
+            ("Reset", self._render_reset_settings_tab),
         ]
         for index, (label, callback) in enumerate(tabs):
             tab_y = layout["tabs_y"] + index * layout["tab_step_y"]
-            tab_item = self.settings_canvas.create_text(layout["tabs_x"], tab_y, anchor="nw", text=label, fill="#cfd4d8", font=("Segoe UI", 10, "bold"))
-            self.settings_tabs[label] = tab_item
-            self.settings_canvas.tag_bind(tab_item, "<Button-1>", lambda _e, name=label, cb=callback: self._select_settings_tab(name, cb))
-            self.settings_canvas.tag_bind(tab_item, "<Enter>", lambda _e, item_id=tab_item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee"))
-            self.settings_canvas.tag_bind(tab_item, "<Leave>", lambda _e, name=label, item_id=tab_item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee" if getattr(self, "active_settings_tab", "") == name else "#cfd4d8"))
+            icon_item = self.settings_canvas.create_image(layout["tabs_x"], tab_y + 2, anchor="nw", image=self.assets.get("checkbox_off.png"))
+            text_item = self.settings_canvas.create_text(layout["tabs_x"] + 28, tab_y, anchor="nw", text=label, fill="#f0f0f0", font=("Cascadia Mono", 10, "bold"))
+            self.settings_tab_items[label] = {"icon": icon_item, "text": text_item, "callback": callback}
+            for item_id in (icon_item, text_item):
+                self.settings_canvas.tag_bind(item_id, "<Button-1>", lambda _e, name=label: self._select_settings_tab(name))
+                self.settings_canvas.tag_bind(item_id, "<Enter>", lambda _e, name=label: self._hover_settings_tab(name, True))
+                self.settings_canvas.tag_bind(item_id, "<Leave>", lambda _e, name=label: self._hover_settings_tab(name, False))
 
-        self._create_settings_button(layout["button_left_x"], layout["button_y"], "Close", self.close_settings_window)
-        self._create_settings_button(layout["button_right_x"], layout["button_y"], "Save Settings", self._save_settings)
-        self._select_settings_tab("General", self._render_general_settings_tab)
+        self._select_settings_tab("Info")
 
     def _create_settings_button(self, x, y, text, command):
         width = 208
         height = 44
-        canvas = tk.Canvas(self.settings_window, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        canvas = tk.Canvas(self.settings_window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         self._set_settings_button_state(canvas, "button_idle.png", text)
         canvas.bind("<Enter>", lambda _e, widget=canvas: self._set_settings_button_state(widget, "button_onmouse.png", text))
         canvas.bind("<Leave>", lambda _e, widget=canvas: self._set_settings_button_state(widget, "button_idle.png", text))
         canvas.bind("<ButtonPress-1>", lambda _e, widget=canvas: self._set_settings_button_state(widget, "button_clicked.png", text))
         canvas.bind("<ButtonRelease-1>", lambda _e, widget=canvas, action=command: (self._set_settings_button_state(widget, "button_onmouse.png", text), action()))
         self.settings_canvas.create_window(x, y, anchor="nw", window=canvas, width=width, height=height)
+
+    def _create_settings_icon_button(self, x, y, idle_name, hover_name, pressed_name, command):
+        item = self.settings_canvas.create_image(x, y, anchor="nw", image=self.assets.get(idle_name))
+        self.settings_canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, image=self.assets.get(hover_name)))
+        self.settings_canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, image=self.assets.get(idle_name)))
+        self.settings_canvas.tag_bind(item, "<ButtonPress-1>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, image=self.assets.get(pressed_name)))
+        self.settings_canvas.tag_bind(item, "<ButtonRelease-1>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, image=self.assets.get(hover_name)))
+        self.settings_canvas.tag_bind(item, "<Button-1>", lambda _e: command())
 
     def _set_settings_button_state(self, canvas, image_name, text):
         canvas.delete("all")
@@ -573,10 +648,11 @@ class EditorApp:
         canvas.create_text(104, 22, text=text, fill="#f0f0f0", font=("Segoe UI", 9, "bold"))
 
     def _clear_settings_content(self):
-        if self.settings_content is None:
+        if self.settings_canvas is None:
             return
-        for child in self.settings_content.winfo_children():
-            child.destroy()
+        for item in self.settings_content_items:
+            self.settings_canvas.delete(item)
+        self.settings_content_items.clear()
 
     def _start_settings_drag(self, event):
         self.settings_drag_offset_x = event.x_root - self.settings_window.winfo_x()
@@ -587,56 +663,128 @@ class EditorApp:
         y = event.y_root - self.settings_drag_offset_y
         self.settings_window.geometry(f"+{x}+{y}")
 
-    def _select_settings_tab(self, name, render_callback):
+    def _hover_settings_tab(self, name, hovered):
+        if not self.settings_canvas or name not in self.settings_tab_items:
+            return
+        if getattr(self, "active_settings_tab", None) == name:
+            self.settings_canvas.itemconfigure(self.settings_tab_items[name]["icon"], image=self.assets.get("checkbox_on.png"))
+            return
+        self.settings_canvas.itemconfigure(
+            self.settings_tab_items[name]["icon"],
+            image=self.assets.get("checkbox_onmouse.png" if hovered else "checkbox_off.png"),
+        )
+
+    def _select_settings_tab(self, name):
         self.active_settings_tab = name
-        for tab_name, item_id in self.settings_tabs.items():
-            self.settings_canvas.itemconfigure(item_id, fill="#56f4ee" if tab_name == name else "#cfd4d8")
+        for tab_name, items in self.settings_tab_items.items():
+            self.settings_canvas.itemconfigure(
+                items["icon"],
+                image=self.assets.get("checkbox_on.png" if tab_name == name else "checkbox_off.png"),
+            )
         self._clear_settings_content()
-        render_callback()
+        self.settings_tab_items[name]["callback"]()
 
-    def _render_general_settings_tab(self):
-        tk.Label(self.settings_content, text="General", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        row = tk.Frame(self.settings_content, bg="#111111")
-        row.pack(anchor="w")
-        tk.Checkbutton(row, variable=self.settings_vars["auto_reload_layout"], bg="#111111", activebackground="#111111", selectcolor="#111111", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
-        tk.Label(row, text="Auto reload layout JSON", bg="#111111", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
+    def _content_anchor(self, rel_x=0, rel_y=0):
+        layout = self.layout["settings_window"]
+        return layout["content_x"] + rel_x, layout["content_y"] + rel_y
 
-    def _render_files_settings_tab(self):
-        tk.Label(self.settings_content, text="Files", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        tk.Label(self.settings_content, text="Open editable config files for the editor.", bg="#111111", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
-        self._create_inline_settings_button(self.settings_content, "Open Layout JSON", lambda: self._open_path_in_system(LAYOUT_PATH))
-        self._create_inline_settings_button(self.settings_content, "Open App Settings", lambda: self._open_path_in_system(APP_SETTINGS_PATH))
+    def _render_text_block(self, lines, rel_x, rel_y, font=("Cascadia Mono", 9, "bold"), fill="#f0f0f0", anchor="nw", justify="left"):
+        x, y = self._content_anchor(rel_x, rel_y)
+        item = self.settings_canvas.create_text(x, y, text="\n".join(lines), anchor=anchor, fill=fill, font=font, justify=justify)
+        self.settings_content_items.append(item)
+        return item
+
+    def _render_info_settings_tab(self):
+        self._render_text_block(
+            [
+                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
+                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
+                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
+                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
+            ],
+            12,
+            34,
+        )
+        if "lunar_avatar.png" in self.assets:
+            x, y = self._content_anchor(0, 152)
+            item = self.settings_canvas.create_image(x, y, image=self.assets["lunar_avatar.png"], anchor="nw")
+            self.settings_content_items.append(item)
+        self._render_text_block(
+            [
+                "Code, Graphical UI Design,",
+                "Realisation by Lunar.",
+                "Idea by authors of LMR Scenario Editor",
+            ],
+            128,
+            188,
+        )
+        if "py_logo.png" in self.assets:
+            x, y = self._content_anchor(0, 440)
+            self.settings_content_items.append(self.settings_canvas.create_image(x, y, image=self.assets["py_logo.png"], anchor="nw"))
+        if "sg_logo.png" in self.assets:
+            x, y = self._content_anchor(220, 426)
+            self.settings_content_items.append(self.settings_canvas.create_image(x, y, image=self.assets["sg_logo.png"], anchor="nw"))
+        self._render_text_block(["SGME Build 15391"], 118, 444, font=("Cascadia Mono", 14, "bold"))
+        self._render_text_block(
+            [
+                "Written on Python Libraries",
+                "Supported games:",
+                "ES, LMR, ES:2(Later)",
+            ],
+            108,
+            474,
+            font=("Cascadia Mono", 8, "bold"),
+        )
 
     def _render_discord_settings_tab(self):
-        tk.Label(self.settings_content, text="Discord", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        row = tk.Frame(self.settings_content, bg="#111111")
-        row.pack(anchor="w")
-        tk.Checkbutton(row, variable=self.settings_vars["discord_rpc_enabled"], bg="#111111", activebackground="#111111", selectcolor="#111111", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
-        tk.Label(row, text="Enable Discord RPC", bg="#111111", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
-        self._create_inline_settings_button(self.settings_content, "Open RPC Config", lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
+        self._render_checkbox_row(0, 24, self.settings_vars["discord_rpc_enabled"], "Enable Discord RPC")
+        self._render_action_text("Open RPC Config", 0, 72, lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
 
-    def _render_advanced_settings_tab(self):
-        tk.Label(self.settings_content, text="Advanced", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        tk.Label(self.settings_content, text="Runtime actions and maintenance tools.", bg="#111111", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
-        self._create_inline_settings_button(self.settings_content, "Reload Layout", self._reload_layout)
+    def _render_editor_settings_tab(self):
+        self._render_checkbox_row(0, 24, self.settings_vars["auto_reload_layout"], "Auto reload layout JSON")
+        self._render_action_text("Open Layout JSON", 0, 72, lambda: self._open_path_in_system(LAYOUT_PATH))
+        self._render_action_text("Reload Layout", 0, 112, self._reload_layout)
 
-    def _create_inline_settings_button(self, parent, text, command):
-        button = tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg="#23262c",
-            fg="#f0f0f0",
-            activebackground="#2f343b",
-            activeforeground="#56f4ee",
-            relief="flat",
-            bd=0,
-            padx=12,
-            pady=6,
-            font=("Segoe UI", 9, "bold"),
-            cursor="hand2",
-        )
-        button.pack(anchor="w", pady=(0, 10))
+    def _render_preferences_settings_tab(self):
+        self._render_action_text("Open App Settings", 0, 24, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
+        self._render_action_text("Save Settings", 0, 64, self._save_settings)
+
+    def _render_reset_settings_tab(self):
+        self._render_action_text("Reset Layout To Defaults", 0, 24, self._reset_layout_to_defaults)
+        self._render_action_text("Reset App Settings", 0, 64, self._reset_app_settings)
+
+    def _render_checkbox_row(self, rel_x, rel_y, variable, label):
+        x, y = self._content_anchor(rel_x, rel_y)
+        icon_name = "checkbox_on.png" if variable.get() else "checkbox_off.png"
+        icon_item = self.settings_canvas.create_image(x, y, image=self.assets.get(icon_name), anchor="nw")
+        text_item = self.settings_canvas.create_text(x + 28, y + 1, text=label, anchor="nw", fill="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        self.settings_content_items.extend([icon_item, text_item])
+
+        def toggle(_event=None):
+            variable.set(not bool(variable.get()))
+            self.settings_canvas.itemconfigure(icon_item, image=self.assets.get("checkbox_on.png" if variable.get() else "checkbox_off.png"))
+
+        for item in (icon_item, text_item):
+            self.settings_canvas.tag_bind(item, "<Button-1>", toggle)
+            self.settings_canvas.tag_bind(item, "<Enter>", lambda _e: self.settings_canvas.itemconfigure(icon_item, image=self.assets.get("checkbox_onmouse.png")))
+            self.settings_canvas.tag_bind(item, "<Leave>", lambda _e: self.settings_canvas.itemconfigure(icon_item, image=self.assets.get("checkbox_on.png" if variable.get() else "checkbox_off.png")))
+
+    def _render_action_text(self, label, rel_x, rel_y, action):
+        x, y = self._content_anchor(rel_x, rel_y)
+        item = self.settings_canvas.create_text(x, y, text=label, anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+        self.settings_content_items.append(item)
+        self.settings_canvas.tag_bind(item, "<Button-1>", lambda _e: action())
+        self.settings_canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, fill="#ffffff"))
+        self.settings_canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee"))
+
+    def _reset_layout_to_defaults(self):
+        LAYOUT_PATH.write_text(json.dumps(DEFAULT_LAYOUT, indent=2), encoding="utf-8")
+
+    def _reset_app_settings(self):
+        self.app_settings = load_app_settings()
+        self.settings_vars["auto_reload_layout"].set(self.app_settings["auto_reload_layout"])
+        self.settings_vars["discord_rpc_enabled"].set(self.app_settings["discord_rpc_enabled"])
+        APP_SETTINGS_PATH.write_text(json.dumps(self.app_settings, indent=2), encoding="utf-8")
 
     def _save_settings(self):
         self.app_settings["auto_reload_layout"] = bool(self.settings_vars["auto_reload_layout"].get())
@@ -653,9 +801,14 @@ class EditorApp:
 
     def close_settings_window(self):
         if self.settings_window is not None and self.settings_window.winfo_exists():
+            try:
+                self.settings_window.grab_release()
+            except tk.TclError:
+                pass
             self.settings_window.destroy()
         self.settings_window = None
         self.settings_canvas = None
+        self.settings_window_bg = None
 
     @staticmethod
     def _deep_update(target, source):
@@ -724,9 +877,13 @@ class EditorApp:
         settings["alpha"] = max(0.1, min(float(settings.get("alpha", default_settings["alpha"])), 1.0))
         settings["offset_x"] = int(settings.get("offset_x", default_settings["offset_x"]))
         settings["offset_y"] = int(settings.get("offset_y", default_settings["offset_y"]))
+        settings["bg_x"] = int(settings.get("bg_x", default_settings["bg_x"]))
+        settings["bg_y"] = int(settings.get("bg_y", default_settings["bg_y"]))
+        settings["close_x"] = int(settings.get("close_x", default_settings["close_x"]))
+        settings["close_y"] = int(settings.get("close_y", default_settings["close_y"]))
         for key in ("title_icon_x", "title_icon_y", "title_x", "title_y", "tabs_x", "tabs_y", "content_x", "content_y", "button_left_x", "button_right_x", "button_y"):
             settings[key] = int(settings.get(key, default_settings[key]))
-        for key in ("tabs_width", "tabs_height", "tab_step_y", "content_width", "content_height"):
+        for key in ("bg_width", "bg_height", "tabs_width", "tabs_height", "tab_step_y", "content_width", "content_height"):
             settings[key] = max(10, int(settings.get(key, default_settings[key])))
 
         return layout
@@ -763,6 +920,10 @@ class EditorApp:
 
         self._build_window()
         self._build_popup_menus()
+        reopen_settings = self.settings_window is not None and self.settings_window.winfo_exists()
+        if reopen_settings:
+            self.close_settings_window()
+            self.root.after(20, self.open_settings_window)
 
         if self.project_dir is not None:
             self._reload_project_files()
