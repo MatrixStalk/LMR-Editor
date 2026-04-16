@@ -98,6 +98,10 @@ DEFAULT_LAYOUT = {
         "height": 512,
         "offset_x": 100,
         "offset_y": 80,
+        "drag_x": 18,
+        "drag_y": 10,
+        "drag_width": 476,
+        "drag_height": 56,
         "title_icon_x": 28,
         "title_icon_y": 26,
         "title_x": 154,
@@ -223,6 +227,8 @@ class EditorApp:
         self.settings_window = None
         self.settings_canvas = None
         self.settings_vars: dict[str, tk.BooleanVar] = {}
+        self.settings_drag_offset_x = 0
+        self.settings_drag_offset_y = 0
 
         self._build_window()
         self._build_popup_menus()
@@ -499,11 +505,23 @@ class EditorApp:
         if "settings.png" in self.assets:
             self.settings_canvas.create_image(layout["title_icon_x"], layout["title_icon_y"], image=self.assets["settings.png"], anchor="nw")
 
+        self.settings_drag_zone = self.settings_canvas.create_rectangle(
+            layout["drag_x"],
+            layout["drag_y"],
+            layout["drag_x"] + layout["drag_width"],
+            layout["drag_y"] + layout["drag_height"],
+            fill="",
+            outline="",
+            tags=("settings_drag_zone",),
+        )
+        self.settings_canvas.tag_bind("settings_drag_zone", "<ButtonPress-1>", self._start_settings_drag)
+        self.settings_canvas.tag_bind("settings_drag_zone", "<B1-Motion>", self._drag_settings_window)
+
         self.settings_canvas.create_text(layout["title_x"], layout["title_y"], anchor="nw", text="Application Settings", fill="#56f4ee", font=("Segoe UI", 15, "bold"))
 
         self.settings_vars["auto_reload_layout"] = tk.BooleanVar(value=self.app_settings["auto_reload_layout"])
         self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
-        self.settings_content = tk.Frame(self.settings_window, bg="#17181c", bd=0, highlightthickness=0)
+        self.settings_content = tk.Frame(self.settings_window, bg="#111111", bd=0, highlightthickness=0)
         self.settings_canvas.create_window(
             layout["content_x"],
             layout["content_y"],
@@ -555,6 +573,15 @@ class EditorApp:
         for child in self.settings_content.winfo_children():
             child.destroy()
 
+    def _start_settings_drag(self, event):
+        self.settings_drag_offset_x = event.x_root - self.settings_window.winfo_x()
+        self.settings_drag_offset_y = event.y_root - self.settings_window.winfo_y()
+
+    def _drag_settings_window(self, event):
+        x = event.x_root - self.settings_drag_offset_x
+        y = event.y_root - self.settings_drag_offset_y
+        self.settings_window.geometry(f"+{x}+{y}")
+
     def _select_settings_tab(self, name, render_callback):
         self.active_settings_tab = name
         for tab_name, item_id in self.settings_tabs.items():
@@ -563,29 +590,29 @@ class EditorApp:
         render_callback()
 
     def _render_general_settings_tab(self):
-        tk.Label(self.settings_content, text="General", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        row = tk.Frame(self.settings_content, bg="#17181c")
+        tk.Label(self.settings_content, text="General", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        row = tk.Frame(self.settings_content, bg="#111111")
         row.pack(anchor="w")
-        tk.Checkbutton(row, variable=self.settings_vars["auto_reload_layout"], bg="#17181c", activebackground="#17181c", selectcolor="#17181c", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
-        tk.Label(row, text="Auto reload layout JSON", bg="#17181c", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
+        tk.Checkbutton(row, variable=self.settings_vars["auto_reload_layout"], bg="#111111", activebackground="#111111", selectcolor="#111111", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
+        tk.Label(row, text="Auto reload layout JSON", bg="#111111", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
 
     def _render_files_settings_tab(self):
-        tk.Label(self.settings_content, text="Files", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        tk.Label(self.settings_content, text="Open editable config files for the editor.", bg="#17181c", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
+        tk.Label(self.settings_content, text="Files", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        tk.Label(self.settings_content, text="Open editable config files for the editor.", bg="#111111", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
         self._create_inline_settings_button(self.settings_content, "Open Layout JSON", lambda: self._open_path_in_system(LAYOUT_PATH))
         self._create_inline_settings_button(self.settings_content, "Open App Settings", lambda: self._open_path_in_system(APP_SETTINGS_PATH))
 
     def _render_discord_settings_tab(self):
-        tk.Label(self.settings_content, text="Discord", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        row = tk.Frame(self.settings_content, bg="#17181c")
+        tk.Label(self.settings_content, text="Discord", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        row = tk.Frame(self.settings_content, bg="#111111")
         row.pack(anchor="w")
-        tk.Checkbutton(row, variable=self.settings_vars["discord_rpc_enabled"], bg="#17181c", activebackground="#17181c", selectcolor="#17181c", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
-        tk.Label(row, text="Enable Discord RPC", bg="#17181c", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
+        tk.Checkbutton(row, variable=self.settings_vars["discord_rpc_enabled"], bg="#111111", activebackground="#111111", selectcolor="#111111", fg="#56f4ee", bd=0, highlightthickness=0).pack(side="left")
+        tk.Label(row, text="Enable Discord RPC", bg="#111111", fg="#e6e6e6", font=("Segoe UI", 10)).pack(side="left", padx=(8, 0))
         self._create_inline_settings_button(self.settings_content, "Open RPC Config", lambda: self._open_path_in_system(DISCORD_RPC_PATH / "config.json"))
 
     def _render_advanced_settings_tab(self):
-        tk.Label(self.settings_content, text="Advanced", bg="#17181c", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
-        tk.Label(self.settings_content, text="Runtime actions and maintenance tools.", bg="#17181c", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
+        tk.Label(self.settings_content, text="Advanced", bg="#111111", fg="#56f4ee", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(6, 18))
+        tk.Label(self.settings_content, text="Runtime actions and maintenance tools.", bg="#111111", fg="#d6d6d6", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 16))
         self._create_inline_settings_button(self.settings_content, "Reload Layout", self._reload_layout)
 
     def _create_inline_settings_button(self, parent, text, command):
