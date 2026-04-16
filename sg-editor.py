@@ -4,6 +4,7 @@ import shutil
 import struct
 import time
 import tkinter as tk
+import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -128,6 +129,26 @@ DEFAULT_LAYOUT = {
         "content_y": 126,
         "content_width": 286,
         "content_height": 290,
+        "texts": {
+            "top_x": 256,
+            "top_y": 160,
+            "middle_x": 256,
+            "middle_y": 314,
+            "discord_x": 256,
+            "discord_y": 470,
+            "bottom_x": 256,
+            "bottom_y": 570
+        },
+        "logos": {
+            "lunar_x": 196,
+            "lunar_y": 278,
+            "python_x": 196,
+            "python_y": 566,
+            "soviet_games_x": 416,
+            "soviet_games_y": 552,
+            "soviet_games_width": 96,
+            "soviet_games_height": 100
+        },
         "button_left_x": 196,
         "button_right_x": 294,
         "button_y": 430
@@ -245,6 +266,7 @@ class EditorApp:
         self.settings_tab_items = {}
         self.settings_content_items = []
         self.settings_window_bg = None
+        self.settings_soviet_games_logo = None
 
         self._build_window()
         self._build_popup_menus()
@@ -331,6 +353,36 @@ class EditorApp:
         scale_y = max(1, (height + max_height - 1) // max_height)
         scale = max(scale_x, scale_y)
         return image.subsample(scale, scale)
+
+    def _resize_image_exact(self, image, width: int, height: int):
+        width = max(1, int(width))
+        height = max(1, int(height))
+        if image.width() == width and image.height() == height:
+            return image
+
+        if Image is not None and ImageTk is not None:
+            pil_image = ImageTk.getimage(image)
+            resized = pil_image.resize((width, height), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(resized)
+
+        source_width = max(1, image.width())
+        source_height = max(1, image.height())
+        return image.zoom(width, height).subsample(source_width, source_height)
+
+    def _load_asset_exact(self, name: str, width: int, height: int):
+        path = ASSETS_DIR / name
+        if not path.exists():
+            return None
+
+        width = max(1, int(width))
+        height = max(1, int(height))
+
+        if Image is not None and ImageTk is not None:
+            with Image.open(path) as source:
+                resized = source.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
+                return ImageTk.PhotoImage(resized)
+
+        return self._resize_image_exact(tk.PhotoImage(file=str(path)), width, height)
 
     def _configure_tree_style(self):
         style = ttk.Style(self.root)
@@ -563,12 +615,14 @@ class EditorApp:
 
         self.settings_canvas = tk.Canvas(self.settings_window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         self.settings_canvas.pack()
-        if "settings_bg.png" in self.assets:
-            settings_bg = self._fit_icon(self.assets["settings_bg.png"], layout["bg_width"], layout["bg_height"])
+        settings_bg = self._load_asset_exact("settings_bg.png", layout["bg_width"], layout["bg_height"])
+        if settings_bg is not None:
             self.settings_window_bg = settings_bg
             self.settings_canvas.create_image(layout["bg_x"], layout["bg_y"], image=self.settings_window_bg, anchor="nw")
         if "settings.png" in self.assets:
-            self.settings_canvas.create_image(layout["title_icon_x"], layout["title_icon_y"], image=self.assets["settings.png"], anchor="nw")
+            settings_icon = self.settings_canvas.create_image(layout["title_icon_x"], layout["title_icon_y"], image=self.assets["settings.png"], anchor="nw")
+            self.settings_canvas.tag_bind(settings_icon, "<ButtonPress-1>", self._start_settings_drag)
+            self.settings_canvas.tag_bind(settings_icon, "<B1-Motion>", self._drag_settings_window)
 
         self.settings_drag_zone = self.settings_canvas.create_rectangle(
             layout["drag_x"],
@@ -591,7 +645,7 @@ class EditorApp:
             self.close_settings_window,
         )
 
-        self.settings_canvas.create_text(
+        title_item = self.settings_canvas.create_text(
             layout["title_x"],
             layout["title_y"],
             anchor="nw",
@@ -599,6 +653,8 @@ class EditorApp:
             fill="#56f4ee",
             font=("Cascadia Mono", 10, "bold"),
         )
+        self.settings_canvas.tag_bind(title_item, "<ButtonPress-1>", self._start_settings_drag)
+        self.settings_canvas.tag_bind(title_item, "<B1-Motion>", self._drag_settings_window)
 
         self.settings_vars["auto_reload_layout"] = tk.BooleanVar(value=self.app_settings["auto_reload_layout"])
         self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
@@ -606,7 +662,7 @@ class EditorApp:
         tabs = [
             ("Info", self._render_info_settings_tab),
             ("Discord RPC", self._render_discord_settings_tab),
-            ("Editor Setting's", self._render_editor_settings_tab),
+            ("Editor", self._render_editor_settings_tab),
             ("Preferences", self._render_preferences_settings_tab),
             ("Reset", self._render_reset_settings_tab),
         ]
@@ -697,10 +753,9 @@ class EditorApp:
     def _render_info_settings_tab(self):
         self._render_text_block(
             [
-                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
-                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
-                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
-                "SOME TEXT SOME TEXT SOME TEXT SOME TEXT",
+                "SGMEditor is a IDE for creating, editing,",
+                "and building modifications for Ren'Py-based games",
+                "by Soviet Games.",
             ],
             12,
             34,
@@ -713,7 +768,7 @@ class EditorApp:
             [
                 "Code, Graphical UI Design,",
                 "Realisation by Lunar.",
-                "Idea by authors of LMR Scenario Editor",
+                "Idea by authors of LMR SE",
             ],
             128,
             188,
@@ -776,6 +831,109 @@ class EditorApp:
         self.settings_canvas.tag_bind(item, "<Button-1>", lambda _e: action())
         self.settings_canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, fill="#ffffff"))
         self.settings_canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee"))
+
+    def _render_info_settings_tab(self):
+        layout = self.layout["settings_window"]
+        texts = layout["texts"]
+        logos = layout["logos"]
+
+        top_item = self.settings_canvas.create_text(
+            texts["top_x"],
+            texts["top_y"],
+            text="\n".join(
+                [
+                    "SGMEditor is a IDE for creating, editing,",
+                    "and building modifications for Ren'Py-based games",
+                    "by Soviet Games.",
+                ]
+            ),
+            anchor="n",
+            fill="#f0f0f0",
+            font=("Cascadia Mono", 9, "bold"),
+            justify="center",
+        )
+        self.settings_content_items.append(top_item)
+
+        if "lunar_avatar.png" in self.assets:
+            self.settings_content_items.append(
+                self.settings_canvas.create_image(logos["lunar_x"], logos["lunar_y"], image=self.assets["lunar_avatar.png"], anchor="nw")
+            )
+
+        middle_item = self.settings_canvas.create_text(
+            texts["middle_x"],
+            texts["middle_y"],
+            text="\n".join(
+                [
+                    "Code, Graphical UI Design,",
+                    "Realisation by Lunar.",
+                    "Idea by authors of LMR SE",
+                ]
+            ),
+            anchor="n",
+            fill="#f0f0f0",
+            font=("Cascadia Mono", 9, "bold"),
+            justify="center",
+        )
+        self.settings_content_items.append(middle_item)
+
+        if "py_logo.png" in self.assets:
+            self.settings_content_items.append(
+                self.settings_canvas.create_image(logos["python_x"], logos["python_y"], image=self.assets["py_logo.png"], anchor="nw")
+            )
+        if "sg_logo.png" in self.assets:
+            soviet_games_logo = self._load_asset_exact("sg_logo.png", logos["soviet_games_width"], logos["soviet_games_height"])
+            self.settings_content_items.append(
+                self.settings_canvas.create_image(
+                    logos["soviet_games_x"],
+                    logos["soviet_games_y"],
+                    image=soviet_games_logo if soviet_games_logo is not None else self.assets["sg_logo.png"],
+                    anchor="nw",
+                )
+            )
+            self.settings_soviet_games_logo = soviet_games_logo
+
+        discord_info_item = self.settings_canvas.create_text(
+            texts["discord_x"],
+            texts["discord_y"],
+            text="Developed for Alzheimer Team",
+            anchor="n",
+            fill="#f0f0f0",
+            font=("Cascadia Mono", 9, "bold"),
+            justify="center",
+        )
+        self.settings_content_items.append(discord_info_item)
+
+        discord_link_item = self.settings_canvas.create_text(
+            texts["discord_x"],
+            texts["discord_y"] + 18,
+            text="Discord Link: https://discord.gg/dd2drP5PnP",
+            anchor="n",
+            fill="#56f4ee",
+            font=("Cascadia Mono", 9, "bold"),
+            justify="center",
+        )
+        self.settings_content_items.append(discord_link_item)
+        self.settings_canvas.tag_bind(discord_link_item, "<Button-1>", lambda _e: webbrowser.open("https://discord.gg/dd2drP5PnP"))
+        self.settings_canvas.tag_bind(discord_link_item, "<Enter>", lambda _e, item_id=discord_link_item: self.settings_canvas.itemconfigure(item_id, fill="#ffffff"))
+        self.settings_canvas.tag_bind(discord_link_item, "<Leave>", lambda _e, item_id=discord_link_item: self.settings_canvas.itemconfigure(item_id, fill="#56f4ee"))
+
+        bottom_item = self.settings_canvas.create_text(
+            texts["bottom_x"],
+            texts["bottom_y"],
+            text="\n".join(
+                [
+                    "SGME Build 15391",
+                    "Written on Python Libraries",
+                    "Supported games:",
+                    "ES, LMR, ES:2(Later)",
+                ]
+            ),
+            anchor="n",
+            fill="#f0f0f0",
+            font=("Cascadia Mono", 8, "bold"),
+            justify="center",
+        )
+        self.settings_content_items.append(bottom_item)
 
     def _reset_layout_to_defaults(self):
         LAYOUT_PATH.write_text(json.dumps(DEFAULT_LAYOUT, indent=2), encoding="utf-8")
@@ -885,6 +1043,10 @@ class EditorApp:
             settings[key] = int(settings.get(key, default_settings[key]))
         for key in ("bg_width", "bg_height", "tabs_width", "tabs_height", "tab_step_y", "content_width", "content_height"):
             settings[key] = max(10, int(settings.get(key, default_settings[key])))
+        if not isinstance(settings.get("logos"), dict):
+            settings["logos"] = {}
+        for key, default_value in default_settings["logos"].items():
+            settings["logos"][key] = int(settings["logos"].get(key, default_value))
 
         return layout
 
