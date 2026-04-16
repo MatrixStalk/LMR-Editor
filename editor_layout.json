@@ -98,13 +98,41 @@
       "bottom_y": 385
     },
     "action_buttons": {
-      "open_rpc_config": 90,
-      "open_layout_json": 110,
-      "reload_layout": 90,
-      "open_app_settings": 110,
-      "save_settings": 80,
-      "reset_layout": 130,
-      "reset_app_settings": 120
+      "open_rpc_config": {
+        "width": 105,
+        "height": 22,
+        "alpha": 1.0
+      },
+      "open_layout_json": {
+        "width": 110,
+        "height": 22,
+        "alpha": 1.0
+      },
+      "reload_layout": {
+        "width": 90,
+        "height": 22,
+        "alpha": 1.0
+      },
+      "open_app_settings": {
+        "width": 120,
+        "height": 22,
+        "alpha": 1.0
+      },
+      "save_settings": {
+        "width": 90,
+        "height": 22,
+        "alpha": 1.0
+      },
+      "reset_layout": {
+        "width": 170,
+        "height": 22,
+        "alpha": 1.0
+      },
+      "reset_app_settings": {
+        "width": 128,
+        "height": 22,
+        "alpha": 1.0
+      }
     },
     "logos": {
       "lunar_x": 166,

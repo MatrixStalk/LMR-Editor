@@ -140,13 +140,13 @@ DEFAULT_LAYOUT = {
             "bottom_y": 570
         },
         "action_buttons": {
-            "open_rpc_config": 90,
-            "open_layout_json": 110,
-            "reload_layout": 90,
-            "open_app_settings": 110,
-            "save_settings": 80,
-            "reset_layout": 130,
-            "reset_app_settings": 120
+            "open_rpc_config": {"width": 90, "height": 22, "alpha": 1.0},
+            "open_layout_json": {"width": 110, "height": 22, "alpha": 1.0},
+            "reload_layout": {"width": 90, "height": 22, "alpha": 1.0},
+            "open_app_settings": {"width": 110, "height": 22, "alpha": 1.0},
+            "save_settings": {"width": 80, "height": 22, "alpha": 1.0},
+            "reset_layout": {"width": 130, "height": 22, "alpha": 1.0},
+            "reset_app_settings": {"width": 120, "height": 22, "alpha": 1.0}
         },
         "logos": {
             "lunar_x": 196,
@@ -402,6 +402,26 @@ class EditorApp:
                 return ImageTk.PhotoImage(resized)
 
         return self._resize_image_exact(tk.PhotoImage(file=str(path)), width, height)
+
+    def _load_asset_exact_alpha(self, name: str, width: int, height: int, alpha: float):
+        path = ASSETS_DIR / name
+        if not path.exists():
+            return None
+
+        width = max(1, int(width))
+        height = max(1, int(height))
+        alpha = max(0.0, min(float(alpha), 1.0))
+
+        if Image is not None and ImageTk is not None:
+            with Image.open(path) as source:
+                resized = source.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
+                if alpha < 1.0:
+                    r, g, b, a = resized.split()
+                    a = a.point(lambda value: int(value * alpha))
+                    resized = Image.merge("RGBA", (r, g, b, a))
+                return ImageTk.PhotoImage(resized)
+
+        return self._load_asset_exact(name, width, height)
 
     def _configure_tree_style(self):
         style = ttk.Style(self.root)
@@ -851,27 +871,26 @@ class EditorApp:
 
     def _render_action_button(self, button_id, label, rel_x, rel_y, action):
         x, y = self._content_anchor(rel_x, rel_y)
-        middle_width = int(self.layout["settings_window"]["action_buttons"].get(button_id, 100))
+        button_cfg = self.layout["settings_window"]["action_buttons"].get(button_id, {"width": 100, "height": 22, "alpha": 1.0})
+        middle_width = int(button_cfg.get("width", 100))
+        button_height = int(button_cfg.get("height", 22))
+        button_alpha = float(button_cfg.get("alpha", 1.0))
         left_idle = self.assets.get("button_border_left_idle.png")
         right_idle = self.assets.get("button_border_right_idle.png")
         if left_idle is None or right_idle is None:
             return
 
-        left_width = left_idle.width()
-        right_width = right_idle.width()
-        height = max(
-            left_idle.height(),
-            right_idle.height(),
-            self.assets.get("button_middle_idle.png").height() if self.assets.get("button_middle_idle.png") else 1,
-        )
+        left_width = max(1, int(round(left_idle.width() * (button_height / max(1, left_idle.height())))))
+        right_width = max(1, int(round(right_idle.width() * (button_height / max(1, right_idle.height())))))
+        height = max(1, button_height)
         total_width = left_width + middle_width + right_width
         widget = tk.Canvas(self.settings_window, width=total_width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         widget._state_images = {}  # type: ignore[attr-defined]
 
         def build_state(state_name: str):
-            left = self.assets.get(f"button_border_left_{state_name}.png")
-            middle = self._load_asset_exact(f"button_middle_{state_name}.png", middle_width, height)
-            right = self.assets.get(f"button_border_right_{state_name}.png")
+            left = self._load_asset_exact_alpha(f"button_border_left_{state_name}.png", left_width, height, button_alpha)
+            middle = self._load_asset_exact_alpha(f"button_middle_{state_name}.png", middle_width, height, button_alpha)
+            right = self._load_asset_exact_alpha(f"button_border_right_{state_name}.png", right_width, height, button_alpha)
             if left is None or middle is None or right is None:
                 return
             widget._state_images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
@@ -1118,7 +1137,16 @@ class EditorApp:
         if not isinstance(settings.get("action_buttons"), dict):
             settings["action_buttons"] = {}
         for key, default_value in default_settings["action_buttons"].items():
-            settings["action_buttons"][key] = max(10, int(settings["action_buttons"].get(key, default_value)))
+            raw_value = settings["action_buttons"].get(key, default_value)
+            if isinstance(raw_value, (int, float)):
+                raw_value = {"width": raw_value, "height": default_value["height"], "alpha": default_value["alpha"]}
+            elif not isinstance(raw_value, dict):
+                raw_value = default_value
+            settings["action_buttons"][key] = {
+                "width": max(10, int(raw_value.get("width", default_value["width"]))),
+                "height": max(1, int(raw_value.get("height", default_value["height"]))),
+                "alpha": max(0.0, min(float(raw_value.get("alpha", default_value["alpha"])), 1.0)),
+            }
         if not isinstance(settings.get("logos"), dict):
             settings["logos"] = {}
         for key, default_value in default_settings["logos"].items():
