@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import shutil
 import struct
@@ -111,6 +111,7 @@ DEFAULT_LAYOUT = {
     "header": {"x": 136, "y": 93},
     "editor": {"x": 180, "y": 101, "width": 1374, "height": 823},
     "line_numbers": {"x": 145, "y": 101, "width": 28, "height": 823},
+    "editor_scrollbar": {"x": 1557, "y": 101, "width": 14, "height": 823},
     "files": {"x": 1658, "y": 77, "width": 170, "height": 844},
     "status": {"mode_x": 106, "mode_y": 919, "cursor_x": 810, "cursor_y": 919},
     "settings_window": {
@@ -266,6 +267,7 @@ class EditorApp:
         self.current_file: Path | None = None
         self.open_files: list[Path] = []
         self.file_buffers: dict[Path, str] = {}
+        self.saved_file_snapshots: dict[Path, str] = {}
         self.dirty_files: set[Path] = set()
         self.drag_offset_x = 0
         self.drag_offset_y = 0
@@ -278,6 +280,7 @@ class EditorApp:
         self.file_tree = None
         self.editor_text = None
         self.line_numbers = None
+        self.editor_scrollbar = None
         self.header_id = None
         self.mode_id = None
         self.cursor_id = None
@@ -301,6 +304,7 @@ class EditorApp:
         self.file_tab_render_job = None
         self.hovered_tree_item = None
         self.last_line_count = 0
+        self.line_numbers_refresh_job = None
 
         self._build_window()
         self._build_popup_menus()
@@ -309,6 +313,7 @@ class EditorApp:
         self._update_presence()
         self._presence_loop()
         self._watch_layout_file()
+        self._schedule_line_numbers_refresh()
 
     def _center_geometry(self):
         width = self.layout["window"]["width"]
@@ -543,6 +548,7 @@ class EditorApp:
         self._render_file_tabs()
 
         editor = self.layout["editor"]
+        editor_font = ("Cascadia Mono", 10)
         self.editor_text = tk.Text(
             self.root,
             bg=PANEL_BACKGROUND,
@@ -550,17 +556,25 @@ class EditorApp:
             insertbackground="#56f4ee",
             selectbackground="#143c3d",
             selectforeground="#ffffff",
-            font=("Cascadia Mono", 10),
+            font=editor_font,
             bd=0,
             highlightthickness=0,
             relief="flat",
             wrap="none",
             undo=True,
+            autoseparators=True,
+            maxundo=-1,
+            padx=0,
+            pady=0,
+            spacing1=0,
+            spacing2=0,
+            spacing3=0,
+            yscrollcommand=self._sync_editor_vertical_views,
         )
-        self.editor_text.bind("<Button-1>", lambda _e: self.editor_text.focus_set())
+        self.editor_text.bind("<Button-1>", self._focus_editor_widget)
+        self.editor_text.bind("<KeyPress>", self._handle_shortcut_keypress)
         self.editor_text.bind("<KeyRelease>", self._handle_editor_key_release)
         self.editor_text.bind("<ButtonRelease>", lambda _e: self._update_status(refresh_lines=False))
-        self.editor_text.bind("<Control-s>", lambda _e: self.save_current_file())
         self.canvas.create_window(editor["x"], editor["y"], anchor="nw", window=self.editor_text, width=editor["width"], height=editor["height"])
 
         line_numbers = self.layout["line_numbers"]
@@ -568,13 +582,22 @@ class EditorApp:
             self.root,
             bg=PANEL_LINES_BACKGROUND,
             fg="#6e6e6e",
-            font=("Cascadia Mono", 9),
+            font=editor_font,
             bd=0,
             highlightthickness=0,
             relief="flat",
             wrap="none",
             state="disabled",
+            padx=0,
+            pady=0,
+            spacing1=0,
+            spacing2=0,
+            spacing3=0,
+            takefocus=0,
         )
+        self.line_numbers.bind("<MouseWheel>", self._scroll_editor_from_line_numbers)
+        self.line_numbers.bind("<Button-4>", self._scroll_editor_from_line_numbers)
+        self.line_numbers.bind("<Button-5>", self._scroll_editor_from_line_numbers)
         self.canvas.create_window(
             line_numbers["x"],
             line_numbers["y"],
@@ -582,6 +605,29 @@ class EditorApp:
             window=self.line_numbers,
             width=line_numbers["width"],
             height=line_numbers["height"],
+        )
+
+        scrollbar = self.layout["editor_scrollbar"]
+        self.editor_scrollbar = tk.Scrollbar(
+            self.root,
+            orient="vertical",
+            command=self._scroll_editor_from_scrollbar,
+            bd=0,
+            relief="flat",
+            troughcolor="#101010",
+            activebackground="#56f4ee",
+            bg="#242424",
+            highlightthickness=0,
+            elementborderwidth=0,
+            width=scrollbar["width"],
+        )
+        self.canvas.create_window(
+            scrollbar["x"],
+            scrollbar["y"],
+            anchor="nw",
+            window=self.editor_scrollbar,
+            width=scrollbar["width"],
+            height=scrollbar["height"],
         )
 
         files = self.layout["files"]
@@ -622,18 +668,48 @@ class EditorApp:
         self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
 
     def _is_file_dirty(self, path: Path) -> bool:
-        return path in self.dirty_files
+        return self.file_buffers.get(path, "") != self.saved_file_snapshots.get(path, "")
 
     def _update_current_buffer(self):
         if self.current_file is None or self.editor_text is None:
             return
-        self.file_buffers[self.current_file] = self.editor_text.get("1.0", "end-1c")
-        self.dirty_files.add(self.current_file)
+        current_text = self.editor_text.get("1.0", "end-1c")
+        self.file_buffers[self.current_file] = current_text
+        if current_text == self.saved_file_snapshots.get(self.current_file, ""):
+            self.dirty_files.discard(self.current_file)
+        else:
+            self.dirty_files.add(self.current_file)
 
     def _handle_editor_key_release(self, _event=None):
         self._update_current_buffer()
         self._update_status(refresh_lines=True)
         self._request_render_file_tabs()
+
+    def _sync_editor_vertical_views(self, first, last=None):
+        if self.line_numbers is not None:
+            self.line_numbers.yview_moveto(first)
+        if self.editor_scrollbar is not None:
+            self.editor_scrollbar.set(first, last if last is not None else first)
+
+    def _scroll_editor_from_scrollbar(self, *args):
+        if self.editor_text is None:
+            return
+        self.editor_text.yview(*args)
+        self._update_status(refresh_lines=False)
+
+    def _scroll_editor_from_line_numbers(self, event):
+        if self.editor_text is None:
+            return "break"
+        if getattr(event, "num", None) == 4:
+            self.editor_text.yview_scroll(-1, "units")
+        elif getattr(event, "num", None) == 5:
+            self.editor_text.yview_scroll(1, "units")
+        else:
+            delta = getattr(event, "delta", 0)
+            if delta != 0:
+                self.editor_text.yview_scroll(int(-delta / 120), "units")
+        self._update_status(refresh_lines=False)
+        return "break"
 
     def _set_tree_item_hover(self, item_id):
         if self.file_tree is None:
@@ -696,6 +772,18 @@ class EditorApp:
 
         self.file_tab_render_job = self.root.after_idle(_run)
 
+    def _schedule_switch_to_file(self, path: Path):
+        if self.root is None:
+            return "break"
+        self.root.after_idle(lambda p=path: self.switch_to_file(p))
+        return "break"
+
+    def _schedule_close_file_tab(self, path: Path):
+        if self.root is None:
+            return "break"
+        self.root.after_idle(lambda p=path: self.close_file_tab(p))
+        return "break"
+
     def _render_file_tabs(self):
         if self.canvas is None:
             return
@@ -734,13 +822,12 @@ class EditorApp:
                 self._load_asset_exact(f"tab_{state_name}_r.png", right_width, height),
             )
 
-        def draw_state(state_name: str):
+        def draw_state(state_name: str, close_state: str = "idle"):
             self.canvas.delete(tab_tag)
             self.canvas.delete(close_tag)
             item_ids.clear()
             left, middle, right = state_assets(state_name)
             text_color = layout["active_text_color"] if path == self.current_file else layout["inactive_text_color"]
-            close_color = layout["close_color_active"] if path == self.current_file else layout["close_color_inactive"]
             item_ids.append(self.canvas.create_rectangle(x, y, x + total_width, y + height, fill=PANEL_BACKGROUND, outline=PANEL_BACKGROUND, tags=(tab_tag,)))
             if left is not None:
                 item_ids.append(self.canvas.create_image(x, y, image=left, anchor="nw", tags=(tab_tag,)))
@@ -758,22 +845,25 @@ class EditorApp:
                     tags=(tab_tag,),
                 )
             )
-            item_ids.append(
-                self.canvas.create_text(
-                    x + total_width - layout["close_padding_right"],
-                    y + (height // 2),
-                    text="x",
-                    fill=close_color,
-                    font=("Cascadia Mono", 9, "bold"),
-                    tags=(close_tag,),
-                )
+            close_icon = self._load_asset_exact(
+                f"exit_btn_{close_state}.png",
+                max(10, height - 6),
+                max(10, height - 6),
             )
-            self.canvas.tag_bind(tab_tag, "<Enter>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "onmouse"))
-            self.canvas.tag_bind(tab_tag, "<Leave>", lambda _e, p=path: draw_state("selected" if p == self.current_file else "inactive"))
-            self.canvas.tag_bind(tab_tag, "<Button-1>", lambda _e, p=path: self.switch_to_file(p))
-            self.canvas.tag_bind(close_tag, "<Button-1>", lambda _e, p=path: self.close_file_tab(p))
+            if close_icon is not None:
+                item_ids.append(
+                    self.canvas.create_image(
+                        x + total_width - layout["close_padding_right"],
+                        y + (height // 2),
+                        image=close_icon,
+                        anchor="center",
+                        tags=(close_tag,),
+                    )
+                )
+            self.canvas.tag_bind(tab_tag, "<Button-1>", lambda _e, p=path: self._schedule_switch_to_file(p))
+            self.canvas.tag_bind(close_tag, "<Button-1>", lambda _e, p=path: self._schedule_close_file_tab(p))
 
-        draw_state(state)
+        draw_state(state, "idle")
         return total_width, item_ids
 
     def _create_image_button(self, x, y, idle_name, hover_name, pressed_name, command):
@@ -787,12 +877,73 @@ class EditorApp:
 
     def _bind_shortcuts(self):
         self.root.bind("<Escape>", lambda _e: self.on_close())
-        self.root.bind("<Control-s>", lambda _e: (self.save_current_file(), "break"))
-        self.root.bind("<Control-z>", lambda _e: (self.editor_text.edit_undo() if self.editor_text else None, self._handle_editor_key_release(), "break"))
-        self.root.bind("<Control-y>", lambda _e: (self.editor_text.edit_redo() if self.editor_text else None, self._handle_editor_key_release(), "break"))
-        self.root.bind("<Control-Shift-Z>", lambda _e: (self.editor_text.edit_redo() if self.editor_text else None, self._handle_editor_key_release(), "break"))
-        self.root.bind("<Control-o>", lambda _e: (self.open_project(), "break"))
-        self.root.bind("<Control-w>", lambda _e: (self.close_file_tab(self.current_file) if self.current_file else None, "break"))
+        self.root.bind_all("<KeyPress>", self._handle_shortcut_keypress)
+
+    def _focus_editor_widget(self, _event=None):
+        if self.editor_text is None:
+            return
+        try:
+            self.editor_text.configure(state="normal")
+        except tk.TclError:
+            pass
+        self.editor_text.focus_set()
+
+    def _save_shortcut(self, _event=None):
+        self.save_current_file()
+        self._focus_editor_widget()
+        return "break"
+
+    def _handle_shortcut_keypress(self, event):
+        ctrl_pressed = bool(getattr(event, "state", 0) & 0x4)
+        if not ctrl_pressed:
+            return
+        keysym = str(getattr(event, "keysym", "")).lower()
+        keycode = int(getattr(event, "keycode", 0) or 0)
+        if keysym == "s" or keycode == 83:
+            return self._save_shortcut(event)
+        if keysym == "z" or keycode == 90:
+            shift_pressed = bool(getattr(event, "state", 0) & 0x1)
+            if shift_pressed:
+                return self._redo_action(event)
+            return self._undo_action(event)
+        if keysym == "y" or keycode == 89:
+            return self._redo_action(event)
+        if keysym == "o" or keycode == 79:
+            return self._open_project_shortcut(event)
+        if keysym == "w" or keycode == 87:
+            return self._close_tab_shortcut(event)
+        return
+
+    def _open_project_shortcut(self, _event=None):
+        self.open_project()
+        return "break"
+
+    def _close_tab_shortcut(self, _event=None):
+        if self.current_file is not None:
+            self.close_file_tab(self.current_file)
+        return "break"
+
+    def _undo_action(self, _event=None):
+        if self.editor_text is None:
+            return "break"
+        try:
+            self.editor_text.edit_undo()
+        except tk.TclError:
+            return "break"
+        self._handle_editor_key_release()
+        self._focus_editor_widget()
+        return "break"
+
+    def _redo_action(self, _event=None):
+        if self.editor_text is None:
+            return "break"
+        try:
+            self.editor_text.edit_redo()
+        except tk.TclError:
+            return "break"
+        self._handle_editor_key_release()
+        self._focus_editor_widget()
+        return "break"
 
     def _show_top_menu(self, event, label, fallback_command):
         menu = self.popup_menus.get(label)
@@ -1259,6 +1410,12 @@ class EditorApp:
         self.settings_canvas = None
         self.settings_window_bg = None
         self.settings_soviet_games_logo = None
+        try:
+            self.root.focus_force()
+        except tk.TclError:
+            pass
+        if self.editor_text is not None:
+            self._focus_editor_widget()
 
     @staticmethod
     def _deep_update(target, source):
@@ -1288,7 +1445,7 @@ class EditorApp:
         drag_y = max(0, min(int(drag_area.get("y", DEFAULT_LAYOUT["drag_area"]["y"])), height - drag_height))
         layout["drag_area"] = {"x": drag_x, "y": drag_y, "width": drag_width, "height": drag_height}
 
-        for key in ("editor", "line_numbers", "files"):
+        for key in ("editor", "line_numbers", "editor_scrollbar", "files"):
             block = layout[key]
             block_width = max(10, min(int(block.get("width", DEFAULT_LAYOUT[key]["width"])), width))
             block_height = max(10, min(int(block.get("height", DEFAULT_LAYOUT[key]["height"])), height))
@@ -1433,6 +1590,7 @@ class EditorApp:
             self.editor_text.see(cursor_index)
         self._update_status()
         self._request_render_file_tabs()
+        self._schedule_line_numbers_refresh()
 
     def _start_drag(self, event):
         drag_area = self.layout["drag_area"]
@@ -1468,6 +1626,7 @@ class EditorApp:
         self.project_dir = Path(folder)
         self.open_files.clear()
         self.file_buffers.clear()
+        self.saved_file_snapshots.clear()
         self.dirty_files.clear()
         self.current_file = None
         self._reload_project_files()
@@ -1519,6 +1678,7 @@ class EditorApp:
         if path not in self.open_files:
             self.open_files.append(path)
         self.current_file = path
+        self.saved_file_snapshots[path] = content
         content = self.file_buffers.get(path, content)
         self.file_buffers[path] = content
         self.dirty_files.discard(path)
@@ -1542,6 +1702,7 @@ class EditorApp:
         current_index = self.open_files.index(path)
         self.open_files.remove(path)
         self.file_buffers.pop(path, None)
+        self.saved_file_snapshots.pop(path, None)
         self.dirty_files.discard(path)
         if not self.open_files:
             self.current_file = None
@@ -1566,6 +1727,7 @@ class EditorApp:
         content = self.editor_text.get("1.0", "end-1c")
         self.file_buffers[self.current_file] = content
         self.current_file.write_text(content, encoding="utf-8")
+        self.saved_file_snapshots[self.current_file] = content
         self.dirty_files.discard(self.current_file)
         self._update_status()
         self._request_render_file_tabs()
@@ -1586,15 +1748,34 @@ class EditorApp:
         shutil.make_archive(str(Path(destination).with_suffix("")), "zip", root_dir=self.project_dir)
 
     def _refresh_line_numbers(self, force=False):
+        if self.editor_text is None or self.line_numbers is None:
+            return
         line_count = int(self.editor_text.index("end-1c").split(".")[0])
-        if not force and line_count == self.last_line_count:
+        current_numbers = self.line_numbers.get("1.0", "end-1c")
+        expected_numbers = "\n".join(str(number) for number in range(1, line_count + 1))
+        if not force and line_count == self.last_line_count and current_numbers == expected_numbers:
             return
         self.last_line_count = line_count
-        data = "\n".join(str(number) for number in range(1, line_count + 1))
         self.line_numbers.config(state="normal")
         self.line_numbers.delete("1.0", "end")
-        self.line_numbers.insert("1.0", data)
+        self.line_numbers.insert("1.0", expected_numbers)
         self.line_numbers.config(state="disabled")
+
+    def _schedule_line_numbers_refresh(self):
+        if self.line_numbers_refresh_job is not None:
+            try:
+                self.root.after_cancel(self.line_numbers_refresh_job)
+            except tk.TclError:
+                pass
+        self.line_numbers_refresh_job = self.root.after(120, self._line_numbers_refresh_tick)
+
+    def _line_numbers_refresh_tick(self):
+        self.line_numbers_refresh_job = None
+        try:
+            self._refresh_line_numbers(force=False)
+        except tk.TclError:
+            return
+        self._schedule_line_numbers_refresh()
 
     def _update_status(self, refresh_lines=True):
         project_name = self.project_dir.name if self.project_dir else "No project open"
@@ -1617,6 +1798,11 @@ class EditorApp:
     def on_close(self):
         self.close_settings_window()
         self.discord.clear()
+        if self.line_numbers_refresh_job is not None:
+            try:
+                self.root.after_cancel(self.line_numbers_refresh_job)
+            except tk.TclError:
+                pass
         self.root.destroy()
 
 
@@ -1628,3 +1814,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
