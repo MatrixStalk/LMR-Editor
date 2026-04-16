@@ -1,11 +1,17 @@
 import json
 import os
 import shutil
+import time
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
+
+try:
+    from pypresence import Presence
+except ImportError:
+    Presence = None
 
 
 TEXT_EXTENSIONS = {
@@ -31,6 +37,9 @@ SNIPPETS = {
     "Call screen": 'call screen phone_ui\n',
     "Image declaration": 'image hero neutral = "images/hero/neutral.png"\n',
 }
+
+APP_DISPLAY_NAME = "Soviet Games Editor"
+DISCORD_RPC_CLIENT_ID = os.environ.get("DISCORD_RPC_CLIENT_ID", "").strip()
 
 
 @dataclass
@@ -82,16 +91,70 @@ class EditorTab:
         return self.text.get("1.0", "end-1c")
 
 
+class DiscordPresenceManager:
+    def __init__(self, client_id: str):
+        self.client_id = client_id
+        self.rpc = None
+        self.connected = False
+        self.started_at = int(time.time())
+
+    @property
+    def available(self) -> bool:
+        return Presence is not None and bool(self.client_id)
+
+    def connect(self):
+        if not self.available or self.connected:
+            return
+        try:
+            self.rpc = Presence(self.client_id)
+            self.rpc.connect()
+            self.connected = True
+        except Exception:
+            self.rpc = None
+            self.connected = False
+
+    def update(self, project_name: str, file_name: str):
+        if not self.available:
+            return
+        if not self.connected:
+            self.connect()
+        if not self.connected or self.rpc is None:
+            return
+        try:
+            self.rpc.update(
+                details=project_name,
+                state=file_name,
+                large_text=APP_DISPLAY_NAME,
+                start=self.started_at,
+            )
+        except Exception:
+            self.connected = False
+            self.rpc = None
+
+    def clear(self):
+        if not self.connected or self.rpc is None:
+            return
+        try:
+            self.rpc.clear()
+            self.rpc.close()
+        except Exception:
+            pass
+        finally:
+            self.connected = False
+            self.rpc = None
+
+
 class ModEditorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("LMR Mod Editor")
+        self.root.title(APP_DISPLAY_NAME)
         self.root.geometry("1440x900")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.project_dir: Path | None = None
         self.tree_paths: dict[str, Path] = {}
         self.tabs: list[EditorTab] = []
+        self.discord_presence = DiscordPresenceManager(DISCORD_RPC_CLIENT_ID)
 
         self.status_var = tk.StringVar(value="No project selected")
         self.search_var = tk.StringVar()
@@ -267,6 +330,7 @@ class ModEditorApp:
         self.open_project(project_dir)
         self.open_file(project_dir / "game" / mod_id / "script.rpy")
         self.status_var.set(f"Created mod project: {project_dir}")
+        self.update_discord_presence()
 
     def open_project(self, chosen_path: Path | None = None):
         if chosen_path is None:
@@ -277,8 +341,9 @@ class ModEditorApp:
 
         self.project_dir = Path(chosen_path)
         self.reload_project_tree()
-        self.root.title(f"LMR Mod Editor - {self.project_dir}")
+        self.root.title(f"{APP_DISPLAY_NAME} - {self.project_dir}")
         self.status_var.set(f"Opened project: {self.project_dir}")
+        self.update_discord_presence()
 
     def reload_project_tree(self):
         self.project_tree.delete(*self.project_tree.get_children())
@@ -339,6 +404,7 @@ class ModEditorApp:
         for index, tab in enumerate(self.tabs):
             if tab.path == path:
                 self.editor_notebook.select(index)
+                self.update_discord_presence()
                 return
 
         if path.suffix.lower() not in TEXT_EXTENSIONS:
@@ -357,6 +423,7 @@ class ModEditorApp:
         self.status_var.set(f"Opened file: {path}")
         self.refresh_outline()
         self.update_cursor_status()
+        self.update_discord_presence()
 
     def refresh_tab_titles(self):
         for index, tab in enumerate(self.tabs):
@@ -397,6 +464,7 @@ class ModEditorApp:
         self.refresh_tab_titles()
         self.reload_project_tree()
         self.status_var.set(f"Saved as: {tab.path}")
+        self.update_discord_presence()
         return True
 
     def export_zip(self):
@@ -524,6 +592,13 @@ class ModEditorApp:
     def _on_tab_changed(self):
         self.refresh_outline()
         self.update_cursor_status()
+        self.update_discord_presence()
+
+    def update_discord_presence(self):
+        project_name = self.project_dir.name if self.project_dir else "No project open"
+        current_tab = self.current_tab()
+        file_name = current_tab.path.name if current_tab and current_tab.path else "No file open"
+        self.discord_presence.update(project_name=project_name, file_name=file_name)
 
     def maybe_save_dirty_tabs(self) -> bool:
         dirty_tabs = [tab for tab in self.tabs if tab.dirty]
@@ -545,6 +620,7 @@ class ModEditorApp:
 
     def on_close(self):
         if self.maybe_save_dirty_tabs():
+            self.discord_presence.clear()
             self.root.destroy()
 
 
