@@ -112,6 +112,7 @@ DEFAULT_LAYOUT = {
     "editor": {"x": 180, "y": 101, "width": 1374, "height": 823},
     "line_numbers": {"x": 145, "y": 101, "width": 28, "height": 823},
     "editor_scrollbar": {"x": 1557, "y": 101, "width": 14, "height": 823},
+    "editor_h_scrollbar": {"x": 180, "y": 928, "width": 1374, "height": 14},
     "files": {"x": 1658, "y": 77, "width": 170, "height": 844},
     "status": {"mode_x": 106, "mode_y": 919, "cursor_x": 810, "cursor_y": 919},
     "settings_window": {
@@ -288,11 +289,19 @@ class EditorApp:
         self.editor_scrollbar_view = (0.0, 1.0)
         self.editor_scrollbar_hovered = False
         self.editor_scrollbar_pressed = False
+        self.editor_h_scrollbar = None
+        self.editor_h_scrollbar_images = {}
+        self.editor_h_scrollbar_thumb = None
+        self.editor_h_scrollbar_thumb_offset_x = 0
+        self.editor_h_scrollbar_view = (0.0, 1.0)
+        self.editor_h_scrollbar_hovered = False
+        self.editor_h_scrollbar_pressed = False
         self.header_id = None
         self.mode_id = None
         self.cursor_id = None
         self.drag_zone_id = None
         self.popup_menus: dict[str, tk.Menu] = {}
+        self.editor_context_menu = None
         self.tree_item_paths: dict[str, Path] = {}
         self.settings_window = None
         self.settings_canvas = None
@@ -581,11 +590,13 @@ class EditorApp:
             spacing2=0,
             spacing3=0,
             yscrollcommand=self._sync_editor_vertical_views,
+            xscrollcommand=self._sync_editor_horizontal_views,
         )
         self.editor_text.bind("<Button-1>", self._focus_editor_widget)
         self.editor_text.bind("<KeyPress>", self._handle_shortcut_keypress)
         self.editor_text.bind("<KeyRelease>", self._handle_editor_key_release)
         self.editor_text.bind("<ButtonRelease>", lambda _e: self._update_status(refresh_lines=False))
+        self.editor_text.bind("<Button-3>", self._show_editor_context_menu)
         self.canvas.create_window(editor["x"], editor["y"], anchor="nw", window=self.editor_text, width=editor["width"], height=editor["height"])
 
         line_numbers = self.layout["line_numbers"]
@@ -639,6 +650,31 @@ class EditorApp:
         )
         self._render_editor_scrollbar(0.0, 1.0)
 
+        h_scrollbar = self.layout["editor_h_scrollbar"]
+        self.editor_h_scrollbar = tk.Canvas(
+            self.root,
+            bg=PANEL_BACKGROUND,
+            bd=0,
+            highlightthickness=0,
+            relief="flat",
+            width=h_scrollbar["width"],
+            height=h_scrollbar["height"],
+        )
+        self.editor_h_scrollbar.bind("<Button-1>", self._handle_editor_h_scrollbar_press)
+        self.editor_h_scrollbar.bind("<B1-Motion>", self._handle_editor_h_scrollbar_drag)
+        self.editor_h_scrollbar.bind("<ButtonRelease-1>", self._handle_editor_h_scrollbar_release)
+        self.editor_h_scrollbar.bind("<Motion>", self._handle_editor_h_scrollbar_motion)
+        self.editor_h_scrollbar.bind("<Leave>", self._handle_editor_h_scrollbar_leave)
+        self.canvas.create_window(
+            h_scrollbar["x"],
+            h_scrollbar["y"],
+            anchor="nw",
+            window=self.editor_h_scrollbar,
+            width=h_scrollbar["width"],
+            height=h_scrollbar["height"],
+        )
+        self._render_editor_h_scrollbar(0.0, 1.0)
+
         files = self.layout["files"]
         self.file_tree = ttk.Treeview(self.root, show="tree", selectmode="browse", style="Files.Treeview")
         self.file_tree.bind("<Double-Button-1>", self._open_selected_file)
@@ -666,6 +702,14 @@ class EditorApp:
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
+
+        editor_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        editor_menu.add_command(label="Copy", command=self._copy_selected_text)
+        editor_menu.add_command(label="Paste", command=self._paste_text)
+        editor_menu.add_command(label="Cut", command=self._cut_selected_text)
+        editor_menu.add_separator()
+        editor_menu.add_command(label="Select All", command=self._select_all_text)
+        self.editor_context_menu = editor_menu
 
     def _create_text_button(self, x, y, text, command):
         item = self.canvas.create_text(x, y, anchor="nw", text=text, fill="#d3d7d5", font=("Segoe UI", 9), tags=(f"button_{text}",))
@@ -713,12 +757,89 @@ class EditorApp:
         self._update_status(refresh_lines=True)
         self._request_render_file_tabs()
 
+    def _get_selected_text(self) -> str:
+        if self.editor_text is None:
+            return ""
+        try:
+            return self.editor_text.get("sel.first", "sel.last")
+        except tk.TclError:
+            return ""
+
+    def _copy_selected_text(self):
+        if self.editor_text is None:
+            return
+        selected = self._get_selected_text()
+        if not selected:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(selected)
+        self._focus_editor_widget()
+
+    def _cut_selected_text(self):
+        if self.editor_text is None:
+            return
+        selected = self._get_selected_text()
+        if not selected:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(selected)
+        self.editor_text.delete("sel.first", "sel.last")
+        self._handle_editor_key_release()
+        self._focus_editor_widget()
+
+    def _paste_text(self):
+        if self.editor_text is None:
+            return
+        try:
+            pasted = self.root.clipboard_get()
+        except tk.TclError:
+            pasted = ""
+        if not pasted:
+            self._focus_editor_widget()
+            return
+        try:
+            if self.editor_text.tag_ranges("sel"):
+                self.editor_text.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        self.editor_text.insert("insert", pasted)
+        self._handle_editor_key_release()
+        self._focus_editor_widget()
+
+    def _select_all_text(self):
+        if self.editor_text is None:
+            return
+        self.editor_text.tag_add("sel", "1.0", "end-1c")
+        self.editor_text.mark_set("insert", "1.0")
+        self.editor_text.see("insert")
+        self._focus_editor_widget()
+
+    def _show_editor_context_menu(self, event):
+        if self.editor_text is None or self.editor_context_menu is None:
+            return "break"
+        selected = bool(self._get_selected_text())
+        self.editor_context_menu.entryconfigure("Copy", state=("normal" if selected else "disabled"))
+        self.editor_context_menu.entryconfigure("Cut", state=("normal" if selected else "disabled"))
+        self.editor_context_menu.entryconfigure("Paste", state="normal")
+        self.editor_context_menu.entryconfigure("Select All", state="normal")
+        try:
+            self.editor_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.editor_context_menu.grab_release()
+        return "break"
+
     def _sync_editor_vertical_views(self, first, last=None):
         first_value = max(0.0, min(float(first), 1.0))
         last_value = first_value if last is None else max(first_value, min(float(last), 1.0))
         self.editor_scrollbar_view = (first_value, last_value)
         self._refresh_line_numbers(force=True)
         self._render_editor_scrollbar(first_value, last_value)
+
+    def _sync_editor_horizontal_views(self, first, last=None):
+        first_value = max(0.0, min(float(first), 1.0))
+        last_value = first_value if last is None else max(first_value, min(float(last), 1.0))
+        self.editor_h_scrollbar_view = (first_value, last_value)
+        self._render_editor_h_scrollbar(first_value, last_value)
 
     def _scroll_editor_from_scrollbar(self, *args):
         if self.editor_text is None:
@@ -748,12 +869,22 @@ class EditorApp:
         thumb_y = int(round(max_thumb_y * normalized_first))
         thumb_y = max(0, min(max_thumb_y, thumb_y))
 
-        thumb_top = self._load_asset_exact("list_track_t.png", width, min(22, thumb_height))
-        thumb_bottom_height = min(22, max(1, thumb_height - (thumb_top.height() if thumb_top is not None else 0)))
-        thumb_bottom = self._load_asset_exact("list_track_b.png", width, thumb_bottom_height)
-        middle_y = thumb_y + (thumb_top.height() if thumb_top is not None else 0)
-        middle_height = thumb_height - ((thumb_top.height() if thumb_top is not None else 0) + (thumb_bottom.height() if thumb_bottom is not None else 0))
-        thumb_middle = self._load_asset_exact("list_track_m.png", width, max(1, middle_height)) if middle_height > 0 else None
+        state_suffix = "clicked" if self.editor_scrollbar_pressed else ("onmouse" if self.editor_scrollbar_hovered else "")
+        top_name = f"list_track_{state_suffix + '_' if state_suffix else ''}t.png"
+        middle_name = f"list_track_{state_suffix + '_' if state_suffix else ''}m.png"
+        bottom_name = f"list_track_{state_suffix + '_' if state_suffix else ''}b.png"
+
+        cap_height = min(22, max(1, thumb_height // 2))
+        top_height = cap_height
+        bottom_height = cap_height if thumb_height > 1 else 1
+        if top_height + bottom_height > thumb_height:
+            bottom_height = max(1, thumb_height - top_height)
+        middle_height = max(0, thumb_height - top_height - bottom_height)
+
+        thumb_top = self._load_asset_exact(top_name, width, top_height)
+        thumb_bottom = self._load_asset_exact(bottom_name, width, bottom_height)
+        middle_y = thumb_y + top_height
+        thumb_middle = self._load_asset_exact(middle_name, width, middle_height) if middle_height > 0 else None
 
         self.editor_scrollbar_thumb = (thumb_y, thumb_y + thumb_height)
         if thumb_top is not None:
@@ -764,7 +895,78 @@ class EditorApp:
             self.editor_scrollbar.create_image(0, middle_y, image=thumb_middle, anchor="nw", tags=("scrollbar_thumb",))
         if thumb_bottom is not None:
             self.editor_scrollbar_images["thumb_bottom"] = thumb_bottom
-            self.editor_scrollbar.create_image(0, thumb_y + thumb_height - thumb_bottom.height(), image=thumb_bottom, anchor="nw", tags=("scrollbar_thumb",))
+            self.editor_scrollbar.create_image(0, thumb_y + thumb_height - bottom_height, image=thumb_bottom, anchor="nw", tags=("scrollbar_thumb",))
+
+    def _is_pointer_over_scrollbar_thumb(self, y: int) -> bool:
+        thumb = self.editor_scrollbar_thumb
+        if thumb is None:
+            return False
+        return thumb[0] <= y <= thumb[1]
+
+    def _render_editor_h_scrollbar(self, first: float, last: float):
+        if self.editor_h_scrollbar is None:
+            return
+        width = max(1, int(self.layout["editor_h_scrollbar"]["width"]))
+        height = max(1, int(self.layout["editor_h_scrollbar"]["height"]))
+        self.editor_h_scrollbar.delete("all")
+
+        background = self._load_asset_exact("list_m_horz.png", width, height)
+        if background is not None:
+            self.editor_h_scrollbar_images["background"] = background
+            self.editor_h_scrollbar.create_image(0, 0, image=background, anchor="nw")
+
+        visible_ratio = max(0.0, min(last - first, 1.0))
+        thumb_width = int(round(width * visible_ratio))
+        min_thumb_width = min(width, max(22, height))
+        thumb_width = max(min_thumb_width, min(width, thumb_width))
+        max_thumb_x = max(0, width - thumb_width)
+        max_first = max(0.0, 1.0 - visible_ratio)
+        normalized_first = 0.0 if max_first <= 0.0 else max(0.0, min(first / max_first, 1.0))
+        thumb_x = int(round(max_thumb_x * normalized_first))
+        thumb_x = max(0, min(max_thumb_x, thumb_x))
+
+        state_suffix = "clicked" if self.editor_h_scrollbar_pressed else ("onmouse" if self.editor_h_scrollbar_hovered else "")
+        left_name = f"list_track_{state_suffix + '_' if state_suffix else ''}b_horz.png"
+        middle_name = f"list_track_{state_suffix + '_' if state_suffix else ''}m_horz.png"
+        right_name = f"list_track_{state_suffix + '_' if state_suffix else ''}t_horz.png"
+
+        cap_width = min(22, max(1, thumb_width // 2))
+        left_width = cap_width
+        right_width = cap_width if thumb_width > 1 else 1
+        if left_width + right_width > thumb_width:
+            right_width = max(1, thumb_width - left_width)
+        middle_width = max(0, thumb_width - left_width - right_width)
+
+        thumb_left = self._load_asset_exact(left_name, left_width, height)
+        thumb_middle = self._load_asset_exact(middle_name, middle_width, height) if middle_width > 0 else None
+        thumb_right = self._load_asset_exact(right_name, right_width, height)
+
+        self.editor_h_scrollbar_thumb = (thumb_x, thumb_x + thumb_width)
+        if thumb_left is not None:
+            self.editor_h_scrollbar_images["thumb_left"] = thumb_left
+            self.editor_h_scrollbar.create_image(thumb_x, 0, image=thumb_left, anchor="nw", tags=("scrollbar_thumb_h",))
+        if thumb_middle is not None:
+            self.editor_h_scrollbar_images["thumb_middle"] = thumb_middle
+            self.editor_h_scrollbar.create_image(thumb_x + left_width, 0, image=thumb_middle, anchor="nw", tags=("scrollbar_thumb_h",))
+        if thumb_right is not None:
+            self.editor_h_scrollbar_images["thumb_right"] = thumb_right
+            self.editor_h_scrollbar.create_image(thumb_x + thumb_width - right_width, 0, image=thumb_right, anchor="nw", tags=("scrollbar_thumb_h",))
+
+    def _is_pointer_over_h_scrollbar_thumb(self, x: int) -> bool:
+        thumb = self.editor_h_scrollbar_thumb
+        if thumb is None:
+            return False
+        return thumb[0] <= x <= thumb[1]
+
+    def _move_editor_to_h_scroll_fraction(self, fraction: float):
+        if self.editor_text is None:
+            return
+        first, last = self.editor_h_scrollbar_view
+        visible_ratio = max(0.0, min(last - first, 1.0))
+        max_first = max(0.0, 1.0 - visible_ratio)
+        normalized_fraction = max(0.0, min(fraction, 1.0))
+        self.editor_text.xview_moveto(max_first * normalized_fraction)
+        self._update_status(refresh_lines=False)
 
     def _move_editor_to_scroll_fraction(self, fraction: float):
         if self.editor_text is None:
@@ -785,12 +987,18 @@ class EditorApp:
         thumb_top, thumb_bottom = thumb
         if thumb_top <= event.y <= thumb_bottom:
             self.editor_scrollbar_thumb_offset_y = event.y - thumb_top
+            self.editor_scrollbar_pressed = True
+            self.editor_scrollbar_hovered = True
+            self._render_editor_scrollbar(*self.editor_scrollbar_view)
             return "break"
         height = max(1, int(self.layout["editor_scrollbar"]["height"]))
         thumb_height = max(1, thumb_bottom - thumb_top)
         target_fraction = (event.y - (thumb_height / 2)) / max(1, height - thumb_height)
         self.editor_scrollbar_thumb_offset_y = thumb_height / 2
+        self.editor_scrollbar_pressed = True
+        self.editor_scrollbar_hovered = self._is_pointer_over_scrollbar_thumb(event.y)
         self._move_editor_to_scroll_fraction(target_fraction)
+        self._render_editor_scrollbar(*self.editor_scrollbar_view)
         return "break"
 
     def _handle_editor_scrollbar_drag(self, event):
@@ -800,12 +1008,85 @@ class EditorApp:
         height = max(1, int(self.layout["editor_scrollbar"]["height"]))
         thumb_height = max(1, thumb[1] - thumb[0])
         target_fraction = (event.y - self.editor_scrollbar_thumb_offset_y) / max(1, height - thumb_height)
+        self.editor_scrollbar_pressed = True
+        self.editor_scrollbar_hovered = True
         self._move_editor_to_scroll_fraction(target_fraction)
+        self._render_editor_scrollbar(*self.editor_scrollbar_view)
         return "break"
 
     def _handle_editor_scrollbar_release(self, _event=None):
         self.editor_scrollbar_thumb_offset_y = 0
+        self.editor_scrollbar_pressed = False
+        self._render_editor_scrollbar(*self.editor_scrollbar_view)
         return "break"
+
+    def _handle_editor_scrollbar_motion(self, event):
+        hovered = self._is_pointer_over_scrollbar_thumb(int(getattr(event, "y", 0)))
+        if hovered != self.editor_scrollbar_hovered and not self.editor_scrollbar_pressed:
+            self.editor_scrollbar_hovered = hovered
+            self._render_editor_scrollbar(*self.editor_scrollbar_view)
+
+    def _handle_editor_scrollbar_leave(self, _event=None):
+        if self.editor_scrollbar_pressed:
+            return
+        if self.editor_scrollbar_hovered:
+            self.editor_scrollbar_hovered = False
+            self._render_editor_scrollbar(*self.editor_scrollbar_view)
+
+    def _handle_editor_h_scrollbar_press(self, event):
+        if self.editor_h_scrollbar is None:
+            return "break"
+        thumb = self.editor_h_scrollbar_thumb
+        if thumb is None:
+            return "break"
+        thumb_left, thumb_right = thumb
+        if thumb_left <= event.x <= thumb_right:
+            self.editor_h_scrollbar_thumb_offset_x = event.x - thumb_left
+            self.editor_h_scrollbar_pressed = True
+            self.editor_h_scrollbar_hovered = True
+            self._render_editor_h_scrollbar(*self.editor_h_scrollbar_view)
+            return "break"
+        width = max(1, int(self.layout["editor_h_scrollbar"]["width"]))
+        thumb_width = max(1, thumb_right - thumb_left)
+        target_fraction = (event.x - (thumb_width / 2)) / max(1, width - thumb_width)
+        self.editor_h_scrollbar_thumb_offset_x = thumb_width / 2
+        self.editor_h_scrollbar_pressed = True
+        self.editor_h_scrollbar_hovered = self._is_pointer_over_h_scrollbar_thumb(event.x)
+        self._move_editor_to_h_scroll_fraction(target_fraction)
+        self._render_editor_h_scrollbar(*self.editor_h_scrollbar_view)
+        return "break"
+
+    def _handle_editor_h_scrollbar_drag(self, event):
+        thumb = self.editor_h_scrollbar_thumb
+        if thumb is None:
+            return "break"
+        width = max(1, int(self.layout["editor_h_scrollbar"]["width"]))
+        thumb_width = max(1, thumb[1] - thumb[0])
+        target_fraction = (event.x - self.editor_h_scrollbar_thumb_offset_x) / max(1, width - thumb_width)
+        self.editor_h_scrollbar_pressed = True
+        self.editor_h_scrollbar_hovered = True
+        self._move_editor_to_h_scroll_fraction(target_fraction)
+        self._render_editor_h_scrollbar(*self.editor_h_scrollbar_view)
+        return "break"
+
+    def _handle_editor_h_scrollbar_release(self, _event=None):
+        self.editor_h_scrollbar_thumb_offset_x = 0
+        self.editor_h_scrollbar_pressed = False
+        self._render_editor_h_scrollbar(*self.editor_h_scrollbar_view)
+        return "break"
+
+    def _handle_editor_h_scrollbar_motion(self, event):
+        hovered = self._is_pointer_over_h_scrollbar_thumb(int(getattr(event, "x", 0)))
+        if hovered != self.editor_h_scrollbar_hovered and not self.editor_h_scrollbar_pressed:
+            self.editor_h_scrollbar_hovered = hovered
+            self._render_editor_h_scrollbar(*self.editor_h_scrollbar_view)
+
+    def _handle_editor_h_scrollbar_leave(self, _event=None):
+        if self.editor_h_scrollbar_pressed:
+            return
+        if self.editor_h_scrollbar_hovered:
+            self.editor_h_scrollbar_hovered = False
+            self._render_editor_h_scrollbar(*self.editor_h_scrollbar_view)
 
     def _scroll_editor_from_line_numbers(self, event):
         if self.editor_text is None:
@@ -1009,6 +1290,15 @@ class EditorApp:
             return
         keysym = str(getattr(event, "keysym", "")).lower()
         keycode = int(getattr(event, "keycode", 0) or 0)
+        if keysym == "c" or keycode == 67:
+            self._copy_selected_text()
+            return "break"
+        if keysym == "v" or keycode == 86:
+            self._paste_text()
+            return "break"
+        if keysym == "a" or keycode == 65:
+            self._select_all_text()
+            return "break"
         if keysym == "s" or keycode == 83:
             return self._save_shortcut(event)
         if keysym == "z" or keycode == 90:
@@ -1474,7 +1764,7 @@ class EditorApp:
             texts["bottom_y"],
             text="\n".join(
                 [
-                    "SGME Build 15391",
+                    "SGME Build ALPHA",
                     "Written on Python Libraries",
                     "Supported games:",
                     "ES, LMR, ES:2(Later)",
@@ -1555,7 +1845,7 @@ class EditorApp:
         drag_y = max(0, min(int(drag_area.get("y", DEFAULT_LAYOUT["drag_area"]["y"])), height - drag_height))
         layout["drag_area"] = {"x": drag_x, "y": drag_y, "width": drag_width, "height": drag_height}
 
-        for key in ("line_numbers", "editor_scrollbar", "files"):
+        for key in ("line_numbers", "editor_scrollbar", "editor_h_scrollbar", "files"):
             block = layout[key]
             block_width = max(10, min(int(block.get("width", DEFAULT_LAYOUT[key]["width"])), width))
             block_height = max(10, min(int(block.get("height", DEFAULT_LAYOUT[key]["height"])), height))
@@ -1875,8 +2165,9 @@ class EditorApp:
             top_dline = self.editor_text.dlineinfo(top_index)
         except tk.TclError:
             return
+        real_line_count = self._get_editor_line_count()
         top_y = 0 if top_dline is None else int(top_dline[1])
-        viewport_signature = (top_index, top_y, canvas_height, canvas_width)
+        viewport_signature = (top_index, top_y, canvas_height, canvas_width, real_line_count)
         if not force and viewport_signature == getattr(self, "last_line_top_index", None):
             return
         self.last_line_top_index = viewport_signature
@@ -1891,7 +2182,7 @@ class EditorApp:
             if y > canvas_height:
                 break
             line_number = index.split(".", 1)[0]
-            if int(line_number) > self._get_editor_line_count():
+            if int(line_number) > real_line_count:
                 break
             self.line_numbers.create_text(
                 canvas_width - 4,
