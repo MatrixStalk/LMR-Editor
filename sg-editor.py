@@ -491,6 +491,7 @@ class EditorApp:
         self.drag_zone_id = None
         self.popup_menus: dict[str, tk.Menu] = {}
         self.editor_context_menu = None
+        self.top_menu_item_ids = []
         self.tree_item_paths: dict[str, Path] = {}
         self.settings_window = None
         self.confirm_window = None
@@ -756,12 +757,7 @@ class EditorApp:
         self.canvas.tag_bind("drag_zone", "<ButtonPress-1>", self._start_drag)
         self.canvas.tag_bind("drag_zone", "<B1-Motion>", self._drag_window)
 
-        menu = self.layout["menu"]
-        self._create_text_button(menu["project_x"], menu["y"], "Project", self.open_project)
-        self._create_text_button(menu["file_x"], menu["y"], "File", self.save_current_file)
-        self._create_text_button(menu["settings_x"], menu["y"], "Settings", self.open_settings_window)
-        if self._detect_project_type() == "lmr":
-            self._create_text_button(menu["resource_manager_x"], menu["y"], "LMR Resource Manager", self.add_lmr_backdrop_bg)
+        self._render_top_menu_buttons()
 
         logos = self.layout["logos"]
         if "me_logo.png" in self.assets:
@@ -927,6 +923,9 @@ class EditorApp:
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
 
+        if self._detect_project_type() == "lmr":
+            self.popup_menus["LMR Resource Manager"] = self._build_lmr_resource_manager_menu(self.root)
+
         editor_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         editor_menu.add_command(label="Copy", command=self._copy_selected_text)
         editor_menu.add_command(label="Paste", command=self._paste_text)
@@ -941,10 +940,35 @@ class EditorApp:
         menu.add_command(label="Add backdrop_text", command=self.add_lmr_backdrop_text)
         menu.add_command(label="Add bg", command=self.add_lmr_bg)
         menu.add_command(label="Add cg", command=self.add_lmr_cg)
+        menu.add_command(label="Add catalogs", command=self.add_lmr_catalogs)
+        menu.add_command(label="Add colors", command=self.add_lmr_colors)
+        menu.add_command(label="Add help", command=self.add_lmr_help)
+        menu.add_command(label="Add notes", command=self.add_lmr_notes)
+        menu.add_command(label="Add positions", command=self.add_lmr_positions)
+        menu.add_command(label="Add sizes", command=self.add_lmr_sizes)
+        menu.add_command(label="Add overlay color", command=self.add_lmr_spritecolor)
         menu.add_command(label="Add sound", command=self.add_lmr_sound)
+        menu.add_command(label="Add transition", command=self.add_lmr_transition)
         menu.add_command(label="Add entryPoint", command=self.add_lmr_entry_point)
         menu.add_command(label="Add variable", command=self.add_lmr_variable)
         return menu
+
+    def _render_top_menu_buttons(self):
+        if self.canvas is None:
+            return
+        for item_id in self.top_menu_item_ids:
+            try:
+                self.canvas.delete(item_id)
+            except tk.TclError:
+                pass
+        self.top_menu_item_ids.clear()
+
+        menu = self.layout["menu"]
+        self.top_menu_item_ids.append(self._create_text_button(menu["project_x"], menu["y"], "Project", self.open_project))
+        self.top_menu_item_ids.append(self._create_text_button(menu["file_x"], menu["y"], "File", self.save_current_file))
+        self.top_menu_item_ids.append(self._create_text_button(menu["settings_x"], menu["y"], "Settings", self.open_settings_window))
+        if self._detect_project_type() == "lmr":
+            self.top_menu_item_ids.append(self._create_text_button(menu["resource_manager_x"], menu["y"], "LMR Resource Manager", self.open_settings_window))
 
     def _create_text_button(self, x, y, text, command):
         item = self.canvas.create_text(x, y, anchor="nw", text=text, fill="#d3d7d5", font=("Segoe UI", 9), tags=(f"button_{text}",))
@@ -954,6 +978,7 @@ class EditorApp:
             self.canvas.tag_bind(item, "<Button-1>", lambda event, label=text, fallback=command: self._show_top_menu(event, label, fallback))
         self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#56f4ee"))
         self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
+        return item
 
     def _is_file_dirty(self, path: Path) -> bool:
         return self.file_buffers.get(path, "") != self.saved_file_snapshots.get(path, "")
@@ -2482,6 +2507,8 @@ class EditorApp:
         self.saved_file_snapshots.clear()
         self.dirty_files.clear()
         self.current_file = None
+        self._build_popup_menus()
+        self._render_top_menu_buttons()
         self._reload_project_files()
         self._update_status()
         self._update_presence()
@@ -3330,6 +3357,228 @@ class EditorApp:
 
         tk.Button(window, text="Add", command=submit).place(x=514, y=238, width=80, height=28)
         tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=238, width=80, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_catalogs(self):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog("Add catalogs", width=700, height=360)
+        tk.Label(window, text="Catalog Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text="Mode", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=300, y=24)
+        name_var = tk.StringVar(value="bundle")
+        mode_var = tk.StringVar(value="single")
+        path_var = tk.StringVar(value="catalogs/bundle/catalog.json")
+        platform_vars = {platform: tk.StringVar() for platform in ("windows", "linux", "macos", "android", "ios")}
+        tk.Entry(window, textvariable=name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=240, height=24)
+        ttk.Combobox(window, textvariable=mode_var, values=["single", "platforms"], state="readonly").place(x=300, y=46, width=120, height=24)
+        single_label = tk.Label(window, text="Catalog Path", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        single_entry = tk.Entry(window, textvariable=path_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
+        single_label.place(x=20, y=92)
+        single_entry.place(x=20, y=114, width=640, height=24)
+        platform_widgets = []
+        start_y = 92
+        for index, platform in enumerate(("windows", "linux", "macos", "android", "ios")):
+            label = tk.Label(window, text=platform, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+            entry = tk.Entry(window, textvariable=platform_vars[platform], bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
+            platform_widgets.append((label, entry, start_y + index * 44))
+
+        def update_form(*_args):
+            is_single = mode_var.get() == "single"
+            if is_single:
+                single_label.place(x=20, y=92)
+                single_entry.place(x=20, y=114, width=640, height=24)
+            else:
+                single_label.place_forget()
+                single_entry.place_forget()
+            for label, entry, y in platform_widgets:
+                if is_single:
+                    label.place_forget()
+                    entry.place_forget()
+                else:
+                    label.place(x=20, y=y)
+                    entry.place(x=120, y=y, width=540, height=24)
+
+        mode_var.trace_add("write", update_form)
+
+        def submit():
+            key = self._slugify_project_id(name_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid catalog name.", window)
+                return
+            if mode_var.get() == "single":
+                value = path_var.get().strip()
+                if not value:
+                    self._show_lmr_warning("Missing Path", "Enter the catalog json path.", window)
+                    return
+                entry_lines = [f"    {key}: {value}"]
+            else:
+                lines = [f"    {key}:"]
+                used = False
+                for platform, var in platform_vars.items():
+                    value = var.get().strip()
+                    if value:
+                        lines.append(f"        {platform}: {value}")
+                        used = True
+                if not used:
+                    self._show_lmr_warning("Missing Paths", "Fill at least one platform path.", window)
+                    return
+                entry_lines = lines
+            self._upsert_lmr_named_entry("catalogs", key, entry_lines)
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=610, y=320, width=70, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=530, y=320, width=70, height=28)
+        update_form()
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_colors(self):
+        self._open_lmr_color_value_dialog("colors", "Add colors", label_name="Color Name")
+
+    def add_lmr_spritecolor(self):
+        self._open_lmr_color_value_dialog("spritecolor", "Add overlay color", label_name="Overlay Name")
+
+    def _open_lmr_color_value_dialog(self, section_name: str, title: str, label_name: str):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog(title, width=520, height=220)
+        tk.Label(window, text=label_name, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text="Color Value", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        name_var = tk.StringVar()
+        value_var = tk.StringVar(value="#56F4EE")
+        tk.Entry(window, textvariable=name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=240, height=24)
+        tk.Entry(window, textvariable=value_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=240, height=24)
+
+        def submit():
+            key = self._slugify_project_id(name_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid name.", window)
+                return
+            value = value_var.get().strip()
+            if not value:
+                self._show_lmr_warning("Missing Color", "Enter a color value.", window)
+                return
+            self._upsert_lmr_named_entry(section_name, key, [f"    {key}: {json.dumps(value, ensure_ascii=False)}"])
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=424, y=176, width=70, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=344, y=176, width=70, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_help(self):
+        self._open_lmr_language_pair_dialog("help", "Add help", default_key="credits")
+
+    def add_lmr_notes(self):
+        self._open_lmr_language_pair_dialog("notes", "Add notes")
+
+    def _open_lmr_language_pair_dialog(self, section_name: str, title: str, default_key: str = ""):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog(title, width=680, height=300)
+        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text="RU Text", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        tk.Label(window, text="EN Text", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=164)
+        key_var = tk.StringVar(value=default_key)
+        ru_var = tk.StringVar()
+        en_var = tk.StringVar()
+        tk.Entry(window, textvariable=key_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=280, height=24)
+        tk.Entry(window, textvariable=ru_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=620, height=24)
+        tk.Entry(window, textvariable=en_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=186, width=620, height=24)
+
+        def submit():
+            key = self._slugify_project_id(key_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            entry_lines = [f"    {key}:"]
+            if ru_var.get().strip():
+                entry_lines.append(f"        ru: {json.dumps(ru_var.get().strip(), ensure_ascii=False)}")
+            if en_var.get().strip():
+                entry_lines.append(f"        en: {json.dumps(en_var.get().strip(), ensure_ascii=False)}")
+            if len(entry_lines) == 1:
+                self._show_lmr_warning("Missing Text", "Enter at least one localized string.", window)
+                return
+            self._upsert_lmr_named_entry(section_name, key, entry_lines)
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=570, y=256, width=70, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=490, y=256, width=70, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_positions(self):
+        self._open_lmr_xy_dialog("positions", "Add positions", labels=("X", "Y"), defaults=("0", "0"))
+
+    def add_lmr_sizes(self):
+        self._open_lmr_xy_dialog("sizes", "Add sizes", labels=("X", "Y"), defaults=("1.0", "1.0"))
+
+    def _open_lmr_xy_dialog(self, section_name: str, title: str, labels=("X", "Y"), defaults=("0", "0")):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog(title, width=540, height=260)
+        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text=labels[0], bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        tk.Label(window, text=labels[1], bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=220, y=84)
+        key_var = tk.StringVar()
+        x_var = tk.StringVar(value=defaults[0])
+        y_var = tk.StringVar(value=defaults[1])
+        tk.Entry(window, textvariable=key_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
+        tk.Entry(window, textvariable=x_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=160, height=24)
+        tk.Entry(window, textvariable=y_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=220, y=106, width=160, height=24)
+
+        def submit():
+            key = self._slugify_project_id(key_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            self._upsert_lmr_named_entry(section_name, key, [
+                f"    {key}:",
+                f"        x: {x_var.get().strip() or defaults[0]}",
+                f"        y: {y_var.get().strip() or defaults[1]}",
+            ])
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=444, y=216, width=70, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=364, y=216, width=70, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_transition(self):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog("Add transition", width=640, height=320)
+        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text="Preset", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        tk.Label(window, text="Duration", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=220, y=84)
+        tk.Label(window, text="Condition", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=144)
+        key_var = tk.StringVar()
+        preset_var = tk.StringVar(value="flash")
+        duration_var = tk.StringVar(value="0.2")
+        condition_var = tk.StringVar()
+        tk.Entry(window, textvariable=key_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
+        ttk.Combobox(window, textvariable=preset_var, values=["flash", "dissolve", "dissolve2", "fade", "wipeleft", "wiperight"], state="readonly").place(x=20, y=106, width=160, height=24)
+        tk.Entry(window, textvariable=duration_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=220, y=106, width=120, height=24)
+        tk.Entry(window, textvariable=condition_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=166, width=600, height=24)
+
+        def submit():
+            key = self._slugify_project_id(key_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            entry_lines = [
+                f"    {key}:",
+                f"        preset: {preset_var.get().strip() or 'flash'}",
+                f"        duration: {duration_var.get().strip() or '0.2'}",
+            ]
+            if condition_var.get().strip():
+                entry_lines.append(f"        condition: {json.dumps(condition_var.get().strip(), ensure_ascii=False)}")
+            self._upsert_lmr_named_entry("transitions", key, entry_lines)
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=550, y=276, width=70, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=470, y=276, width=70, height=28)
         window.grab_set()
         window.focus_force()
 
