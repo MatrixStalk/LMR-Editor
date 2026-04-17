@@ -273,5 +273,38 @@
       "note_2_x": 18,
       "note_2_y": 94
     }
+  },
+  "create_file_window": {
+    "width": 520,
+    "height_lmr": 350,
+    "height_es": 250,
+    "title_x": 260,
+    "title_y": 20,
+    "type_x": 28,
+    "type_y": 56,
+    "type_step_y": 26,
+    "file_name_label_x": 28,
+    "file_name_label_y_lmr": 176,
+    "file_name_label_y_es": 120,
+    "file_name_entry_x": 28,
+    "file_name_entry_y_lmr": 200,
+    "file_name_entry_y_es": 144,
+    "file_name_entry_width": 300,
+    "technical_label_x": 28,
+    "technical_label_y": 236,
+    "technical_entry_x": 28,
+    "technical_entry_y": 260,
+    "technical_entry_width": 180,
+    "folder_label_x": 250,
+    "folder_label_y": 236,
+    "folder_entry_x": 250,
+    "folder_entry_y": 260,
+    "folder_entry_width": 180,
+    "folder_note_x": 28,
+    "folder_note_y": 290,
+    "return_x": 270,
+    "create_x": 390,
+    "actions_y_lmr": 306,
+    "actions_y_es": 206
   }
 }

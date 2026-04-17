@@ -314,6 +314,39 @@ DEFAULT_LAYOUT = {
             "note_2_x": 18,
             "note_2_y": 124
         }
+    },
+    "create_file_window": {
+        "width": 520,
+        "height_lmr": 350,
+        "height_es": 250,
+        "title_x": 260,
+        "title_y": 20,
+        "type_x": 28,
+        "type_y": 56,
+        "type_step_y": 26,
+        "file_name_label_x": 28,
+        "file_name_label_y_lmr": 176,
+        "file_name_label_y_es": 120,
+        "file_name_entry_x": 28,
+        "file_name_entry_y_lmr": 200,
+        "file_name_entry_y_es": 144,
+        "file_name_entry_width": 300,
+        "technical_label_x": 28,
+        "technical_label_y": 236,
+        "technical_entry_x": 28,
+        "technical_entry_y": 260,
+        "technical_entry_width": 180,
+        "folder_label_x": 250,
+        "folder_label_y": 236,
+        "folder_entry_x": 250,
+        "folder_entry_y": 260,
+        "folder_entry_width": 180,
+        "folder_note_x": 28,
+        "folder_note_y": 290,
+        "return_x": 270,
+        "create_x": 390,
+        "actions_y_lmr": 306,
+        "actions_y_es": 206
     }
 }
 
@@ -2302,6 +2335,11 @@ class EditorApp:
             for key, default_value in default_create_project[section_name].items():
                 create_project[section_name][key] = int(create_project[section_name].get(key, default_value))
 
+        create_file = layout["create_file_window"]
+        default_create_file = DEFAULT_LAYOUT["create_file_window"]
+        for key, default_value in default_create_file.items():
+            create_file[key] = int(create_file.get(key, default_value))
+
         return layout
 
     def _get_layout_mtime(self):
@@ -2425,7 +2463,7 @@ class EditorApp:
             "menu": "menu:\n    bg:\n        0:\n            asset: bg/menu_bg.jpg\n    logos:\n        0:\n            asset: default\n    tracks:\n        0:\n            asset: sound/menu_theme.ogg",
             "particles": "particles:\n    sakura: particles/sakura.prefab",
             "positions": "positions:\n    custom_center:\n        x: 0.5\n        y: 0.5",
-            "scenarios": "scenarios:\n    main: scripts/main.txt",
+            "scenarios": "scenarios:",
             "sizes": "sizes:\n    custom_normal:\n        x: 1.0\n        y: 1.0",
             "sound": "sound:\n    menu_theme: sound/menu_theme.ogg",
             "spritecolor": "spritecolor:\n    sunset_tint: \"#FFB34766\"",
@@ -2487,6 +2525,7 @@ class EditorApp:
                 scenario_header = index
                 break
 
+        scenario_rel_path = scenario_rel_path.replace("\\", "/")
         new_entry = f"    {scenario_name}: {scenario_rel_path}"
 
         if scenario_header is None:
@@ -2514,8 +2553,23 @@ class EditorApp:
                 lines.insert(insert_at, new_entry)
 
         resources_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+        updated_content = resources_path.read_text(encoding="utf-8")
+        self.saved_file_snapshots[resources_path] = updated_content
+        self.file_buffers[resources_path] = updated_content
+        self.dirty_files.discard(resources_path)
+        if self.current_file == resources_path and self.editor_text is not None:
+            current_index = self.editor_text.index("insert")
+            self._set_editor_content(updated_content)
+            try:
+                self.editor_text.mark_set("insert", current_index)
+                self.editor_text.see(current_index)
+            except tk.TclError:
+                pass
+            self._refresh_line_numbers(force=True)
+            self._update_status(refresh_lines=False)
+            self._request_render_file_tabs()
 
-    def create_project_text_file(self):
+    def create_project_text_file(self, initial_state=None):
         if self.project_dir is None:
             messagebox.showwarning("No project", "Open a project first.", parent=self.root)
             return
@@ -2525,8 +2579,9 @@ class EditorApp:
             messagebox.showwarning("Unknown project", "Could not detect project type.", parent=self.root)
             return
 
-        width = 520
-        height = 320 if project_type == "lmr" else 250
+        cfg = self.layout["create_file_window"]
+        width = cfg["width"]
+        height = cfg["height_lmr"] if project_type == "lmr" else cfg["height_es"]
         window = tk.Toplevel(self.root)
         window.transient(self.root)
         window.resizable(False, False)
@@ -2547,12 +2602,13 @@ class EditorApp:
         canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         canvas.pack()
         self._draw_window_frame(canvas, width, height)
-        canvas.create_text(width // 2, 20, text="Create Project File", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project File", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
 
-        kind_var = tk.StringVar(value="scenario_txt" if project_type == "lmr" else "rpy_script")
-        name_var = tk.StringVar()
-        folder_var = tk.StringVar()
-        technical_name_var = tk.StringVar()
+        initial_state = initial_state or {}
+        kind_var = tk.StringVar(value=str(initial_state.get("kind", "scenario_txt" if project_type == "lmr" else "rpy_script")))
+        name_var = tk.StringVar(value=str(initial_state.get("name", "")))
+        folder_var = tk.StringVar(value=str(initial_state.get("folder", "")))
+        technical_name_var = tk.StringVar(value=str(initial_state.get("technical_name", "")))
 
         panel_bg = "#101010"
         panel_border = "#1d1d1d"
@@ -2616,29 +2672,56 @@ class EditorApp:
             toggle_rows.append(refresh)
             refresh()
 
-        add_label(28, 56, "Type")
+        add_label(cfg["type_x"], cfg["type_y"], "Type")
         if project_type == "lmr":
-            create_asset_toggle(28, 82, "Scenario TXT", kind_var, "scenario_txt")
-            create_asset_toggle(28, 108, "YAML (resources signature)", kind_var, "yaml_resources", width_px=260)
-            create_asset_toggle(28, 134, "YAML (meta signature)", kind_var, "yaml_meta", width_px=240)
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"], "Scenario TXT", kind_var, "scenario_txt")
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"] * 2, "YAML (resources signature)", kind_var, "yaml_resources", width_px=260)
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"] * 3, "YAML (meta signature)", kind_var, "yaml_meta", width_px=240)
         else:
-            create_asset_toggle(28, 82, "Ren'Py Script (.rpy)", kind_var, "rpy_script", width_px=220)
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"], "Ren'Py Script (.rpy)", kind_var, "rpy_script", width_px=220)
 
-        add_label(28, 176 if project_type == "lmr" else 120, "File Name")
-        name_entry = add_entry(28, 200 if project_type == "lmr" else 144, 300, name_var)
+        add_label(cfg["file_name_label_x"], cfg["file_name_label_y_lmr"] if project_type == "lmr" else cfg["file_name_label_y_es"], "File Name")
+        name_entry = add_entry(cfg["file_name_entry_x"], cfg["file_name_entry_y_lmr"] if project_type == "lmr" else cfg["file_name_entry_y_es"], cfg["file_name_entry_width"], name_var)
 
-        technical_name_label = canvas.create_text(28, 236, text="Technical Name", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
-        technical_name_entry = add_entry(28, 260, 180, technical_name_var)
-        folder_label = canvas.create_text(250, 236, text="Scenario Folder (optional)", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
-        folder_entry = add_entry(250, 260, 180, folder_var)
+        technical_name_label = canvas.create_text(cfg["technical_label_x"], cfg["technical_label_y"], text="Technical Name", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+        technical_name_entry = add_entry(cfg["technical_entry_x"], cfg["technical_entry_y"], cfg["technical_entry_width"], technical_name_var)
+        folder_label = canvas.create_text(cfg["folder_label_x"], cfg["folder_label_y"], text="Scenario Folder (optional)", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+        folder_entry = add_entry(cfg["folder_entry_x"], cfg["folder_entry_y"], cfg["folder_entry_width"], folder_var)
         folder_note = canvas.create_text(
-            28,
-            290,
+            cfg["folder_note_x"],
+            cfg["folder_note_y"],
             text="Only one folder inside project.\nLeave empty to create file in project root.",
             anchor="nw",
             fill="#9aa0a0",
             font=("Cascadia Mono", 8, "bold"),
         )
+
+        create_file_layout_mtime = self._get_layout_mtime()
+
+        def capture_create_file_state():
+            return {
+                "kind": kind_var.get(),
+                "name": name_var.get(),
+                "folder": folder_var.get(),
+                "technical_name": technical_name_var.get(),
+            }
+
+        def watch_create_file_layout():
+            if not window.winfo_exists():
+                return
+            current_mtime = self._get_layout_mtime()
+            if current_mtime != create_file_layout_mtime:
+                state = capture_create_file_state()
+                try:
+                    window.grab_release()
+                except tk.TclError:
+                    pass
+                window.destroy()
+                self.layout_mtime = current_mtime
+                self.layout = self._sanitize_layout(load_json(LAYOUT_PATH, DEFAULT_LAYOUT))
+                self.root.after(20, lambda s=state: self.create_project_text_file(s))
+                return
+            window.after(350, watch_create_file_layout)
 
         def update_form_state(*_args):
             is_scenario = project_type == "lmr" and kind_var.get() == "scenario_txt"
@@ -2679,6 +2762,8 @@ class EditorApp:
             target_dir = self.project_dir
             scenario_rel_path = file_name
             scenario_key = Path(file_name).stem
+            resources_path = self.project_dir / "resources.yaml"
+            showing_resources = self.current_file == resources_path
 
             if project_type == "lmr" and file_kind == "scenario_txt":
                 raw_technical_name = technical_name_var.get().strip()
@@ -2697,7 +2782,7 @@ class EditorApp:
                         messagebox.showwarning("Invalid Folder", "Enter a valid folder name.", parent=window)
                         return
                     target_dir = self.project_dir / folder_name
-                    scenario_rel_path = f"{folder_name}\\{file_name}"
+                    scenario_rel_path = f"{folder_name}/{file_name}"
 
             target_dir.mkdir(parents=True, exist_ok=True)
             target_path = target_dir / file_name
@@ -2722,13 +2807,20 @@ class EditorApp:
 
             self._reload_project_files()
             close_dialog()
-            self.open_file(target_path)
+            def finalize_open():
+                if showing_resources and resources_path.exists():
+                    self.open_file(resources_path)
+                else:
+                    self.open_file(target_path)
+                self._focus_editor_widget()
+            self.root.after(20, finalize_open)
 
         update_form_state()
-        self._create_composite_button(window, canvas, 270, height - 44, "Return", 80, 24, close_dialog)
-        self._create_composite_button(window, canvas, 390, height - 44, "Create", 80, 24, create_action)
+        self._create_composite_button(window, canvas, cfg["return_x"], cfg["actions_y_lmr"] if project_type == "lmr" else cfg["actions_y_es"], "Return", 80, 24, close_dialog)
+        self._create_composite_button(window, canvas, cfg["create_x"], cfg["actions_y_lmr"] if project_type == "lmr" else cfg["actions_y_es"], "Create", 80, 24, create_action)
         name_entry.focus_set()
         window.bind("<Escape>", lambda _e: close_dialog())
+        window.after(350, watch_create_file_layout)
         window.grab_set()
         window.deiconify()
         window.lift()
