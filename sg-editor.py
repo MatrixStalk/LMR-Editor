@@ -2445,7 +2445,7 @@ class EditorApp:
             lines.append(f"cover: {json.dumps(cover_rel_path, ensure_ascii=False)}")
         return "\n".join(lines[:2] + [lines[2], "", lines[3], lines[4]] + lines[5:]) + "\n"
 
-    def create_mod_project(self):
+    def create_mod_project(self, initial_state=None):
         result = {"created": False}
         cfg = self.layout["create_project_window"]
         general_cfg = cfg["general"]
@@ -2497,14 +2497,15 @@ class EditorApp:
 
         panel_bg = "#101010"
         panel_border = "#1d1d1d"
-        game_var = tk.StringVar(value="lmr")
-        panel_var = tk.StringVar(value="general")
-        game_path_var = tk.StringVar()
-        project_id_var = tk.StringVar()
-        lmr_title_var = tk.StringVar()
-        lmr_version_var = tk.StringVar(value="0.1.0")
-        es_display_name_var = tk.StringVar()
-        cover_path_var = tk.StringVar()
+        initial_state = initial_state or {}
+        game_var = tk.StringVar(value=str(initial_state.get("game", "lmr")))
+        panel_var = tk.StringVar(value=str(initial_state.get("panel", "general")))
+        game_path_var = tk.StringVar(value=str(initial_state.get("game_path", "")))
+        project_id_var = tk.StringVar(value=str(initial_state.get("project_id", "")))
+        lmr_title_var = tk.StringVar(value=str(initial_state.get("lmr_title", "")))
+        lmr_version_var = tk.StringVar(value=str(initial_state.get("lmr_version", "0.1.0")))
+        es_display_name_var = tk.StringVar(value=str(initial_state.get("es_display_name", "")))
+        cover_path_var = tk.StringVar(value=str(initial_state.get("cover_path", "")))
         target_path_var = tk.StringVar()
 
         content_frame = tk.Frame(window, bg=panel_bg, bd=0, highlightthickness=1, highlightbackground=panel_border)
@@ -2528,29 +2529,32 @@ class EditorApp:
             highlightbackground=panel_border,
             wrap="word",
         )
+        if initial_state.get("lmr_description"):
+            lmr_description_widget.insert("1.0", str(initial_state.get("lmr_description", "")))
 
+        section_state = initial_state.get("sections", {})
         section_vars = {
-            "backdrop_bg": tk.BooleanVar(value=False),
-            "backdrop_text": tk.BooleanVar(value=False),
-            "bg": tk.BooleanVar(value=False),
-            "cg": tk.BooleanVar(value=False),
-            "catalogs": tk.BooleanVar(value=False),
-            "characters": tk.BooleanVar(value=False),
-            "chibis": tk.BooleanVar(value=False),
-            "collections": tk.BooleanVar(value=False),
-            "colors": tk.BooleanVar(value=False),
-            "entryPoint": tk.BooleanVar(value=True),
-            "help": tk.BooleanVar(value=False),
-            "live2d_characters": tk.BooleanVar(value=False),
-            "menu": tk.BooleanVar(value=False),
-            "particles": tk.BooleanVar(value=False),
-            "positions": tk.BooleanVar(value=False),
-            "scenarios": tk.BooleanVar(value=True),
-            "sizes": tk.BooleanVar(value=False),
-            "sound": tk.BooleanVar(value=True),
-            "spritecolor": tk.BooleanVar(value=False),
-            "variables": tk.BooleanVar(value=True),
-            "transitions": tk.BooleanVar(value=False),
+            "backdrop_bg": tk.BooleanVar(value=bool(section_state.get("backdrop_bg", False))),
+            "backdrop_text": tk.BooleanVar(value=bool(section_state.get("backdrop_text", False))),
+            "bg": tk.BooleanVar(value=bool(section_state.get("bg", False))),
+            "cg": tk.BooleanVar(value=bool(section_state.get("cg", False))),
+            "catalogs": tk.BooleanVar(value=bool(section_state.get("catalogs", False))),
+            "characters": tk.BooleanVar(value=bool(section_state.get("characters", False))),
+            "chibis": tk.BooleanVar(value=bool(section_state.get("chibis", False))),
+            "collections": tk.BooleanVar(value=bool(section_state.get("collections", False))),
+            "colors": tk.BooleanVar(value=bool(section_state.get("colors", False))),
+            "entryPoint": tk.BooleanVar(value=bool(section_state.get("entryPoint", True))),
+            "help": tk.BooleanVar(value=bool(section_state.get("help", False))),
+            "live2d_characters": tk.BooleanVar(value=bool(section_state.get("live2d_characters", False))),
+            "menu": tk.BooleanVar(value=bool(section_state.get("menu", False))),
+            "particles": tk.BooleanVar(value=bool(section_state.get("particles", False))),
+            "positions": tk.BooleanVar(value=bool(section_state.get("positions", False))),
+            "scenarios": tk.BooleanVar(value=bool(section_state.get("scenarios", True))),
+            "sizes": tk.BooleanVar(value=bool(section_state.get("sizes", False))),
+            "sound": tk.BooleanVar(value=bool(section_state.get("sound", True))),
+            "spritecolor": tk.BooleanVar(value=bool(section_state.get("spritecolor", False))),
+            "variables": tk.BooleanVar(value=bool(section_state.get("variables", True))),
+            "transitions": tk.BooleanVar(value=bool(section_state.get("transitions", False))),
         }
 
         def add_canvas_label(x, y, text, color="#f0f0f0", anchor="nw"):
@@ -2822,6 +2826,40 @@ class EditorApp:
         lmr_title_var.trace_add("write", sync_project_id)
         es_display_name_var.trace_add("write", sync_project_id)
 
+        def capture_project_state():
+            return {
+                "game": game_var.get(),
+                "panel": panel_var.get(),
+                "game_path": game_path_var.get(),
+                "project_id": project_id_var.get(),
+                "lmr_title": lmr_title_var.get(),
+                "lmr_version": lmr_version_var.get(),
+                "es_display_name": es_display_name_var.get(),
+                "cover_path": cover_path_var.get(),
+                "lmr_description": lmr_description_widget.get("1.0", "end-1c"),
+                "sections": {key: bool(variable.get()) for key, variable in section_vars.items()},
+            }
+
+        create_project_layout_mtime = self._get_layout_mtime()
+        recreate_state = {"data": None}
+
+        def watch_create_project_layout():
+            if not window.winfo_exists():
+                return
+            current_mtime = self._get_layout_mtime()
+            if current_mtime != create_project_layout_mtime:
+                recreate_state["data"] = capture_project_state()
+                try:
+                    window.grab_release()
+                except tk.TclError:
+                    pass
+                window.destroy()
+                self.layout_mtime = current_mtime
+                self.layout = self._sanitize_layout(load_json(LAYOUT_PATH, DEFAULT_LAYOUT))
+                self.root.after(20, lambda state=recreate_state["data"]: self.create_mod_project(state))
+                return
+            window.after(350, watch_create_project_layout)
+
         def close_dialog():
             try:
                 window.grab_release()
@@ -2908,6 +2946,7 @@ class EditorApp:
         self._create_composite_button(window, canvas, cfg["return_x"], cfg["actions_y"], "Return", 80, 24, close_dialog)
         self._create_composite_button(window, canvas, cfg["create_x"], cfg["actions_y"], "Create", 80, 24, create_project_action)
         window.bind("<Escape>", lambda _e: close_dialog())
+        window.after(350, watch_create_project_layout)
         window.grab_set()
         window.deiconify()
         window.lift()
