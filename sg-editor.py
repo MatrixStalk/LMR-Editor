@@ -1,5 +1,6 @@
 ﻿import json
 import os
+import re
 import shutil
 import struct
 import time
@@ -7,7 +8,7 @@ import tkinter as tk
 import webbrowser
 import sys
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 try:
     from PIL import Image, ImageTk
@@ -32,6 +33,11 @@ TRANSPARENT_COLOR = "#010203"
 PANEL_BACKGROUND = "#090909"
 PANEL_LINES_BACKGROUND = "#101010"
 TEXT_EXTENSIONS = {".json", ".md", ".py", ".rpy", ".rpym", ".toml", ".txt", ".xml", ".yml", ".yaml"}
+SUPPORTED_MOD_GAMES = [
+    {"id": "lmr", "name": "Love, Money, Rock'n'Roll"},
+    {"id": "es", "name": "Everlasting Summer"},
+    {"id": "es2", "name": "Everlasting Summer 2"},
+]
 
 
 def load_json(path: Path, default):
@@ -703,6 +709,8 @@ class EditorApp:
         self.popup_menus = {}
 
         project_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        project_menu.add_command(label="Create Project", command=self.create_mod_project)
+        project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
         self.popup_menus["Project"] = project_menu
@@ -2155,11 +2163,8 @@ class EditorApp:
     def _handle_window_map(self, _event=None):
         self.root.after(10, self._restore_borderless)
 
-    def open_project(self):
-        folder = filedialog.askdirectory(title="Select mod project folder")
-        if not folder:
-            return
-        self.project_dir = Path(folder)
+    def _set_project_dir(self, path: Path):
+        self.project_dir = path
         self.open_files.clear()
         self.file_buffers.clear()
         self.saved_file_snapshots.clear()
@@ -2169,6 +2174,337 @@ class EditorApp:
         self._update_status()
         self._update_presence()
         self._request_render_file_tabs()
+
+    def _slugify_project_id(self, value: str) -> str:
+        slug = re.sub(r"[^a-z0-9_]+", "_", value.lower())
+        slug = re.sub(r"_+", "_", slug).strip("_")
+        return slug or "new_mod"
+
+    def _is_valid_project_id(self, value: str) -> bool:
+        return bool(re.fullmatch(r"[A-Za-z0-9_]+", value))
+
+    def _build_lmr_resources_yaml(self, selected_sections: list[str]) -> str:
+        section_templates = {
+            "sound": "sound:\n  menu_theme: sound/menu_theme.ogg",
+            "spritecolor": "spritecolor:\n  sunset_tint: \"#FFB34766\"",
+            "variables": "variables:\n  intro_seen: false\n  love_points: 0",
+            "bg": "bg:\n  ext_street_day: bg/ext_street_day.jpg",
+            "cg": "cg:\n  event_intro: cg/event_intro.jpg",
+            "colors": "colors:\n  accent: \"#56F4EE\"",
+            "characters": "characters:\n  hero:\n    poses:\n      normal:\n        parts:\n          body: sprites/hero/body.png",
+            "scenarios": "scenarios:\n  main: scripts/main.txt",
+        }
+        lines = ["---"]
+        for key in selected_sections:
+            template = section_templates.get(key)
+            if template:
+                lines.append(template)
+        return "\n".join(lines).strip() + "\n"
+
+    def _build_lmr_meta_yaml(self, title: str, description: str, version: str, cover_rel_path: str | None) -> str:
+        lines = [
+            "---",
+            "title:",
+            f"  ru: {json.dumps(title, ensure_ascii=False)}",
+            "description:",
+            f"  ru: {json.dumps(description, ensure_ascii=False)}",
+            f"version: {json.dumps(version, ensure_ascii=False)}",
+        ]
+        if cover_rel_path:
+            lines.append(f"cover: {json.dumps(cover_rel_path, ensure_ascii=False)}")
+        return "\n".join(lines) + "\n"
+
+    def create_mod_project(self):
+        result = {"created": False}
+        width = 660
+        height = 620
+        window = tk.Toplevel(self.root)
+        window.transient(self.root)
+        window.resizable(False, False)
+        window.configure(bg=TRANSPARENT_COLOR)
+        window.overrideredirect(True)
+        try:
+            window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
+        except tk.TclError:
+            pass
+        try:
+            window.wm_attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        window.geometry(
+            f"{width}x{height}+{self.root.winfo_x() + max(0, (self.layout['window']['width'] - width) // 2)}+{self.root.winfo_y() + max(0, (self.layout['window']['height'] - height) // 2)}"
+        )
+        canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
+        canvas.pack()
+        self._draw_window_frame(canvas, width, height)
+        canvas.create_text(width // 2, 24, text="Create Project", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+
+        game_var = tk.StringVar(value="lmr")
+        game_path_var = tk.StringVar()
+        project_id_var = tk.StringVar()
+        lmr_title_var = tk.StringVar()
+        lmr_version_var = tk.StringVar(value="0.1.0")
+        es_display_name_var = tk.StringVar()
+        cover_path_var = tk.StringVar()
+        lmr_description_widget = tk.Text(window, width=30, height=4, font=("Cascadia Mono", 9), bg="#101010", fg="#f0f0f0", insertbackground="#56f4ee", bd=0, highlightthickness=1, highlightbackground="#1d1d1d", wrap="word")
+        sections_frame = tk.Frame(window, bg="#101010", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+        section_vars = {
+            "sound": tk.BooleanVar(value=True),
+            "spritecolor": tk.BooleanVar(value=False),
+            "variables": tk.BooleanVar(value=True),
+            "bg": tk.BooleanVar(value=False),
+            "cg": tk.BooleanVar(value=False),
+            "colors": tk.BooleanVar(value=False),
+            "characters": tk.BooleanVar(value=False),
+            "scenarios": tk.BooleanVar(value=True),
+        }
+
+        labels = {
+            "sound": "sound",
+            "spritecolor": "spritecolor",
+            "variables": "variables",
+            "bg": "bg",
+            "cg": "cg",
+            "colors": "colors",
+            "characters": "characters",
+            "scenarios": "scenarios",
+        }
+        current_row = 0
+        for key, label in labels.items():
+            cb = tk.Checkbutton(
+                sections_frame,
+                text=label,
+                variable=section_vars[key],
+                onvalue=True,
+                offvalue=False,
+                bg="#101010",
+                fg="#f0f0f0",
+                activebackground="#101010",
+                activeforeground="#56f4ee",
+                selectcolor="#101010",
+                font=("Cascadia Mono", 9, "bold"),
+                highlightthickness=0,
+                bd=0,
+            )
+            cb.grid(row=current_row // 2, column=current_row % 2, sticky="w", padx=10, pady=4)
+            current_row += 1
+
+        def add_label(x, y, text, color="#f0f0f0"):
+            canvas.create_text(x, y, text=text, anchor="nw", fill=color, font=("Cascadia Mono", 9, "bold"))
+
+        def add_entry(x, y, width_px, variable):
+            entry = tk.Entry(window, textvariable=variable, font=("Cascadia Mono", 9), bg="#101010", fg="#f0f0f0", insertbackground="#56f4ee", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+            canvas.create_window(x, y, anchor="nw", window=entry, width=width_px, height=24)
+            return entry
+
+        add_label(30, 58, "Game")
+        radio_y = 82
+        for offset, game in enumerate(SUPPORTED_MOD_GAMES):
+            state = "disabled" if game["id"] == "es2" else "normal"
+            rb = tk.Radiobutton(
+                window,
+                text=(game["name"] + (" (Locked)" if game["id"] == "es2" else "")),
+                variable=game_var,
+                value=game["id"],
+                state=state,
+                bg="#101010",
+                fg="#f0f0f0",
+                activebackground="#101010",
+                activeforeground="#56f4ee",
+                selectcolor="#101010",
+                disabledforeground="#6e6e6e",
+                font=("Cascadia Mono", 9, "bold"),
+                anchor="w",
+                bd=0,
+                highlightthickness=0,
+                justify="left",
+            )
+            canvas.create_window(30, radio_y + offset * 24, anchor="nw", window=rb, width=300, height=22)
+
+        add_label(30, 164, "Game Folder")
+        game_folder_entry = add_entry(30, 188, 470, game_path_var)
+
+        def browse_game_folder():
+            folder = filedialog.askdirectory(title="Select game folder")
+            if folder:
+                game_path_var.set(folder)
+                window.lift()
+                window.focus_force()
+
+        self._create_composite_button(window, canvas, 516, 188, "Browse", 72, 24, browse_game_folder)
+
+        add_label(30, 226, "Project ID")
+        project_id_entry = add_entry(30, 250, 220, project_id_var)
+        add_label(270, 226, "Allowed: latin, digits, _", "#9aa0a0")
+
+        add_label(30, 292, "LMR Title")
+        lmr_title_entry = add_entry(30, 316, 270, lmr_title_var)
+        add_label(320, 292, "Version")
+        lmr_version_entry = add_entry(320, 316, 120, lmr_version_var)
+        add_label(30, 350, "LMR Description")
+        canvas.create_window(30, 374, anchor="nw", window=lmr_description_widget, width=410, height=74)
+
+        add_label(460, 292, "Cover")
+        cover_entry = add_entry(460, 316, 128, cover_path_var)
+        add_label(460, 350, "Cover warning:", "#56f4ee")
+        add_label(460, 372, "max 2 MB", "#d7d9d7")
+        add_label(460, 394, "recommended 445x200", "#d7d9d7")
+
+        def browse_cover_file():
+            path = filedialog.askopenfilename(
+                title="Select cover image",
+                filetypes=[("Image files", "*.png;*.jpg;*.jpeg"), ("PNG", "*.png"), ("JPEG", "*.jpg;*.jpeg")],
+            )
+            if not path:
+                return
+            cover_path_var.set(path)
+            cover_file = Path(path)
+            warnings = []
+            try:
+                if cover_file.stat().st_size > 2 * 1024 * 1024:
+                    warnings.append("Cover is larger than 2 MB.")
+            except OSError:
+                pass
+            if Image is not None:
+                try:
+                    with Image.open(cover_file) as cover_image:
+                        if cover_image.size != (445, 200):
+                            warnings.append(f"Recommended resolution is 445x200, current: {cover_image.size[0]}x{cover_image.size[1]}.")
+                except OSError:
+                    pass
+            if warnings:
+                messagebox.showwarning("Cover Warning", "\n".join(warnings))
+            window.lift()
+            window.focus_force()
+
+        self._create_composite_button(window, canvas, 460, 420, "Choose", 70, 24, browse_cover_file)
+
+        add_label(30, 466, "resources.yaml sections")
+        canvas.create_window(30, 490, anchor="nw", window=sections_frame, width=300, height=88)
+
+        add_label(350, 466, "ES Display Name")
+        es_display_entry = add_entry(350, 490, 238, es_display_name_var)
+        add_label(350, 522, "Shown in the in-game mod list", "#9aa0a0")
+
+        def update_form_state(*_args):
+            is_lmr = game_var.get() == "lmr"
+            normal_state = "normal" if is_lmr else "disabled"
+            es_state = "normal" if game_var.get() == "es" else "disabled"
+            for widget in (lmr_description_widget,):
+                widget.configure(state=normal_state)
+            lmr_title_entry.configure(state=normal_state)
+            lmr_version_entry.configure(state=normal_state)
+            cover_entry.configure(state=normal_state)
+            es_display_entry.configure(state=es_state)
+            for child in sections_frame.winfo_children():
+                child.configure(state=normal_state)
+        game_var.trace_add("write", update_form_state)
+        update_form_state()
+
+        def sync_project_id(*_args):
+            if project_id_var.get().strip():
+                return
+            lmr_source = lmr_title_var.get().strip() or es_display_name_var.get().strip()
+            if lmr_source:
+                project_id_var.set(self._slugify_project_id(lmr_source))
+
+        lmr_title_var.trace_add("write", sync_project_id)
+        es_display_name_var.trace_add("write", sync_project_id)
+
+        def close_dialog():
+            try:
+                window.grab_release()
+            except tk.TclError:
+                pass
+            window.destroy()
+            self._focus_editor_widget()
+
+        def create_project_action():
+            game_id = game_var.get()
+            game_root = Path(game_path_var.get().strip())
+            project_id = project_id_var.get().strip()
+
+            if game_id == "es2":
+                messagebox.showwarning("Locked", "Everlasting Summer: 2 is currently locked.")
+                return
+            if not game_root.exists():
+                messagebox.showwarning("Invalid Folder", "Select a valid game folder.")
+                return
+            if not self._is_valid_project_id(project_id):
+                messagebox.showwarning("Invalid Project ID", "Project ID may contain only latin letters, digits and underscores.")
+                return
+
+            if game_id == "lmr":
+                exe_name = "Love, Money, Rock'n'Roll.exe"
+                mods_root = game_root / "Love, Money, Rock'n'Roll_Data" / "mods"
+            else:
+                exe_name = "Everlasting Summer.exe"
+                mods_root = game_root / "game" / "mods"
+
+            if not (game_root / exe_name).exists():
+                messagebox.showwarning("Game Not Found", f"Required file was not found:\n{game_root / exe_name}")
+                return
+
+            project_dir = mods_root / project_id
+            if project_dir.exists() and any(project_dir.iterdir()):
+                messagebox.showwarning("Project Exists", f"Folder already exists and is not empty:\n{project_dir}")
+                return
+            mods_root.mkdir(parents=True, exist_ok=True)
+            project_dir.mkdir(parents=True, exist_ok=True)
+
+            if game_id == "lmr":
+                title = lmr_title_var.get().strip()
+                description = lmr_description_widget.get("1.0", "end-1c").strip()
+                version = lmr_version_var.get().strip() or "0.1.0"
+                if not title:
+                    messagebox.showwarning("Missing Title", "Enter title for meta.yaml.")
+                    return
+                selected_sections = [key for key, variable in section_vars.items() if variable.get()]
+                resources_yaml = self._build_lmr_resources_yaml(selected_sections)
+                cover_rel_path = None
+                cover_source = cover_path_var.get().strip()
+                if cover_source:
+                    cover_src_path = Path(cover_source)
+                    if cover_src_path.exists():
+                        images_dir = project_dir / "images"
+                        images_dir.mkdir(parents=True, exist_ok=True)
+                        cover_ext = cover_src_path.suffix.lower() if cover_src_path.suffix.lower() in {".png", ".jpg", ".jpeg"} else ".png"
+                        cover_dest = images_dir / f"cover{cover_ext}"
+                        shutil.copy2(cover_src_path, cover_dest)
+                        cover_rel_path = f"images/{cover_dest.name}"
+                meta_yaml = self._build_lmr_meta_yaml(title, description, version, cover_rel_path)
+                (project_dir / "resources.yaml").write_text(resources_yaml, encoding="utf-8")
+                (project_dir / "meta.yaml").write_text(meta_yaml, encoding="utf-8")
+            else:
+                display_name = es_display_name_var.get().strip()
+                if not display_name:
+                    messagebox.showwarning("Missing Name", "Enter the translated display name for the mod.")
+                    return
+                script_content = (
+                    "init:\n\n"
+                    f"\t$ mods[\"{project_id}\"] = u\"{display_name}\"\n\n"
+                    "label start:\n"
+                )
+                (project_dir / f"{project_id}.rpy").write_text(script_content, encoding="utf-8")
+
+            result["created"] = True
+            close_dialog()
+            self._set_project_dir(project_dir)
+
+        self._create_composite_button(window, canvas, 360, 582, "Return", 80, 24, close_dialog)
+        self._create_composite_button(window, canvas, 500, 582, "Create", 80, 24, create_project_action)
+        window.bind("<Escape>", lambda _e: close_dialog())
+        window.grab_set()
+        window.deiconify()
+        window.lift()
+        window.focus_force()
+        window.wait_window()
+
+    def open_project(self):
+        folder = filedialog.askdirectory(title="Select mod project folder")
+        if not folder:
+            return
+        self._set_project_dir(Path(folder))
 
     def _reload_project_files(self):
         if self.file_tree is None:
