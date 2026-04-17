@@ -2688,18 +2688,24 @@ class EditorApp:
         add_label(cfg["file_name_label_x"], cfg["file_name_label_y_lmr"] if project_type == "lmr" else cfg["file_name_label_y_es"], "File Name")
         name_entry = add_entry(cfg["file_name_entry_x"], cfg["file_name_entry_y_lmr"] if project_type == "lmr" else cfg["file_name_entry_y_es"], cfg["file_name_entry_width"], name_var)
 
-        technical_name_label = canvas.create_text(cfg["technical_label_x"], cfg["technical_label_y"], text="Technical Name", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
-        technical_name_entry = add_entry(cfg["technical_entry_x"], cfg["technical_entry_y"], cfg["technical_entry_width"], technical_name_var)
-        folder_label = canvas.create_text(cfg["folder_label_x"], cfg["folder_label_y"], text="Scenario Folder (optional)", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
-        folder_entry = add_entry(cfg["folder_entry_x"], cfg["folder_entry_y"], cfg["folder_entry_width"], folder_var)
-        folder_note = canvas.create_text(
-            cfg["folder_note_x"],
-            cfg["folder_note_y"],
-            text="Leave empty to create file in project root.",
-            anchor="nw",
-            fill="#9aa0a0",
-            font=("Cascadia Mono", 8, "bold"),
-        )
+        technical_name_label = None
+        technical_name_entry = None
+        folder_label = None
+        folder_entry = None
+        folder_note = None
+        if project_type == "lmr":
+            technical_name_label = canvas.create_text(cfg["technical_label_x"], cfg["technical_label_y"], text="Technical Name", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+            technical_name_entry = add_entry(cfg["technical_entry_x"], cfg["technical_entry_y"], cfg["technical_entry_width"], technical_name_var)
+            folder_label = canvas.create_text(cfg["folder_label_x"], cfg["folder_label_y"], text="Scenario Folder (optional)", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+            folder_entry = add_entry(cfg["folder_entry_x"], cfg["folder_entry_y"], cfg["folder_entry_width"], folder_var)
+            folder_note = canvas.create_text(
+                cfg["folder_note_x"],
+                cfg["folder_note_y"],
+                text="Leave empty to create file in project root.",
+                anchor="nw",
+                fill="#9aa0a0",
+                font=("Cascadia Mono", 8, "bold"),
+            )
 
         create_file_layout_mtime = self._get_layout_mtime()
 
@@ -2730,11 +2736,16 @@ class EditorApp:
 
         def update_form_state(*_args):
             is_scenario = project_type == "lmr" and kind_var.get() == "scenario_txt"
-            folder_entry.configure(state=("normal" if is_scenario else "disabled"))
-            technical_name_entry.configure(state=("normal" if is_scenario else "disabled"))
-            canvas.itemconfigure(folder_note, state=("normal" if is_scenario else "hidden"))
-            canvas.itemconfigure(technical_name_label, state=("normal" if is_scenario else "hidden"))
-            canvas.itemconfigure(folder_label, state=("normal" if is_scenario else "hidden"))
+            if folder_entry is not None:
+                folder_entry.configure(state=("normal" if is_scenario else "disabled"))
+            if technical_name_entry is not None:
+                technical_name_entry.configure(state=("normal" if is_scenario else "disabled"))
+            if folder_note is not None:
+                canvas.itemconfigure(folder_note, state=("normal" if is_scenario else "hidden"))
+            if technical_name_label is not None:
+                canvas.itemconfigure(technical_name_label, state=("normal" if is_scenario else "hidden"))
+            if folder_label is not None:
+                canvas.itemconfigure(folder_label, state=("normal" if is_scenario else "hidden"))
             for refresh in toggle_rows:
                 refresh()
 

@@ -276,7 +276,7 @@
   },
   "create_file_window": {
     "width": 520,
-    "height_lmr": 400,
+    "height_lmr": 270,
     "height_es": 250,
     "title_x": 260,
     "title_y": 20,
@@ -303,10 +303,10 @@
     "folder_entry_y": 132,
     "folder_entry_width": 180,
     "folder_note_x": 28,
-    "folder_note_y": 290,
-    "return_x": 270,
-    "create_x": 390,
-    "actions_y_lmr": 346,
+    "folder_note_y": 840,
+    "return_x": 300,
+    "create_x": 400,
+    "actions_y_lmr": 235,
     "actions_y_es": 206
   }
 }
