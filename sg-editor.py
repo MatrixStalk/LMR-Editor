@@ -80,11 +80,15 @@ def load_app_settings():
     default_settings = {
         "auto_reload_layout": True,
         "discord_rpc_enabled": True,
+        "default_lmr_game_dir": "",
+        "default_es_game_dir": "",
     }
     settings = load_json(APP_SETTINGS_PATH, default_settings)
     merged = default_settings.copy()
     for key, value in settings.items():
         if isinstance(value, bool):
+            merged[key] = value
+        elif key in {"default_lmr_game_dir", "default_es_game_dir"} and isinstance(value, str):
             merged[key] = value
     return merged
 
@@ -1752,6 +1756,8 @@ class EditorApp:
 
         self.settings_vars["auto_reload_layout"] = tk.BooleanVar(value=self.app_settings["auto_reload_layout"])
         self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
+        self.settings_vars["default_lmr_game_dir"] = tk.StringVar(value=self.app_settings.get("default_lmr_game_dir", ""))
+        self.settings_vars["default_es_game_dir"] = tk.StringVar(value=self.app_settings.get("default_es_game_dir", ""))
 
         tabs = [
             ("Info", self._render_info_settings_tab),
@@ -1901,8 +1907,10 @@ class EditorApp:
         self._render_action_button("reload_layout", "Reload Layout", 0, 112, self._reload_layout)
 
     def _render_preferences_settings_tab(self):
-        self._render_action_button("open_app_settings", "Open App Settings", 0, 24, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
-        self._render_action_button("save_settings", "Save Settings", 0, 64, self._save_settings)
+        self._render_settings_path_row(0, 24, "Default LMR Game Folder", self.settings_vars["default_lmr_game_dir"], "Select default Love, Money, Rock'n'Roll folder")
+        self._render_settings_path_row(0, 84, "Default ES Game Folder", self.settings_vars["default_es_game_dir"], "Select default Everlasting Summer folder")
+        self._render_action_button("save_settings", "Save Settings", 0, 144, self._save_settings)
+        self._render_action_button("open_app_settings", "Open App Settings", 0, 184, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
 
     def _render_reset_settings_tab(self):
         self._render_action_button("reset_layout", "Reset Layout To Defaults", 0, 24, self._reset_layout_to_defaults)
@@ -1945,6 +1953,45 @@ class EditorApp:
             return
         self.settings_action_widgets.append(widget)
         self.settings_content_items.append(window_item)
+
+    def _render_settings_path_row(self, rel_x, rel_y, label, variable, browse_title):
+        x, y = self._content_anchor(rel_x, rel_y)
+        label_item = self.settings_canvas.create_text(x, y, text=label, anchor="nw", fill="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        self.settings_content_items.append(label_item)
+
+        entry = tk.Entry(
+            self.settings_window,
+            textvariable=variable,
+            font=("Cascadia Mono", 8),
+            bg="#101010",
+            fg="#f0f0f0",
+            insertbackground="#56f4ee",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#1d1d1d",
+        )
+        entry_item = self.settings_canvas.create_window(x, y + 24, anchor="nw", window=entry, width=186, height=24)
+        self.settings_action_widgets.append(entry)
+        self.settings_content_items.append(entry_item)
+
+        def browse():
+            try:
+                self.settings_window.wm_attributes("-topmost", False)
+            except tk.TclError:
+                pass
+            try:
+                folder = filedialog.askdirectory(title=browse_title, parent=self.settings_window, initialdir=variable.get() or str(BASE_DIR))
+            finally:
+                try:
+                    self.settings_window.wm_attributes("-topmost", True)
+                    self.settings_window.lift()
+                    self.settings_window.focus_force()
+                except tk.TclError:
+                    pass
+            if folder:
+                variable.set(folder)
+
+        self._render_action_button("save_settings", "Browse", rel_x + 194, rel_y + 24, browse)
 
     def _render_info_settings_tab(self):
         layout = self.layout["settings_window"]
@@ -3119,8 +3166,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
