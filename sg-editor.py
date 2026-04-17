@@ -209,6 +209,105 @@ DEFAULT_LAYOUT = {
         "button_left_x": 196,
         "button_right_x": 294,
         "button_y": 430
+    },
+    "create_project_window": {
+        "width": 840,
+        "height": 760,
+        "title_x": 420,
+        "title_y": 24,
+        "game_label_x": 30,
+        "game_label_y": 58,
+        "game_x": 30,
+        "game_y": 82,
+        "game_step_y": 26,
+        "menu_label_x": 30,
+        "menu_label_y": 196,
+        "menu_x": 30,
+        "menu_y": 220,
+        "menu_step_y": 28,
+        "content_x": 194,
+        "content_y": 286,
+        "content_width": 614,
+        "content_height": 408,
+        "actions_y": 716,
+        "return_x": 540,
+        "create_x": 680,
+        "general": {
+            "game_folder_label_x": 18,
+            "game_folder_label_y": 18,
+            "game_folder_entry_x": 18,
+            "game_folder_entry_y": 44,
+            "game_folder_entry_width": 430,
+            "browse_x": 462,
+            "browse_y": 44,
+            "browse_width": 90,
+            "project_id_label_x": 18,
+            "project_id_label_y": 90,
+            "project_id_entry_x": 18,
+            "project_id_entry_y": 116,
+            "project_id_entry_width": 220,
+            "project_id_hint_x": 258,
+            "project_id_hint_y": 120,
+            "target_label_x": 18,
+            "target_label_y": 164,
+            "target_value_x": 18,
+            "target_value_y": 190,
+            "target_value_width": 560,
+            "target_value_height": 88,
+            "note_x": 18,
+            "note_y": 292
+        },
+        "lmr": {
+            "title_label_x": 18,
+            "title_label_y": 18,
+            "title_entry_x": 18,
+            "title_entry_y": 44,
+            "title_entry_width": 270,
+            "version_label_x": 308,
+            "version_label_y": 18,
+            "version_entry_x": 308,
+            "version_entry_y": 44,
+            "version_entry_width": 120,
+            "description_label_x": 18,
+            "description_label_y": 82,
+            "description_x": 18,
+            "description_y": 106,
+            "description_width": 410,
+            "description_height": 60,
+            "cover_label_x": 448,
+            "cover_label_y": 18,
+            "cover_entry_x": 448,
+            "cover_entry_y": 44,
+            "cover_entry_width": 130,
+            "cover_warning_label_x": 448,
+            "cover_warning_label_y": 82,
+            "cover_warning_1_x": 448,
+            "cover_warning_1_y": 106,
+            "cover_warning_2_x": 448,
+            "cover_warning_2_y": 124,
+            "cover_button_x": 448,
+            "cover_button_y": 152,
+            "cover_button_width": 90,
+            "resources_label_x": 18,
+            "resources_label_y": 186,
+            "resources_note_x": 18,
+            "resources_note_y": 210,
+            "resources_x": 18,
+            "resources_y": 236,
+            "resources_column_width": 192,
+            "resources_row_height": 24
+        },
+        "es": {
+            "display_label_x": 18,
+            "display_label_y": 18,
+            "display_entry_x": 18,
+            "display_entry_y": 44,
+            "display_entry_width": 320,
+            "note_1_x": 18,
+            "note_1_y": 82,
+            "note_2_x": 18,
+            "note_2_y": 124
+        }
     }
 }
 
@@ -2104,6 +2203,38 @@ class EditorApp:
                 value = max(1, value)
             settings["logos"][key] = value
 
+        create_project = layout["create_project_window"]
+        default_create_project = DEFAULT_LAYOUT["create_project_window"]
+        for key in (
+            "width",
+            "height",
+            "title_x",
+            "title_y",
+            "game_label_x",
+            "game_label_y",
+            "game_x",
+            "game_y",
+            "game_step_y",
+            "menu_label_x",
+            "menu_label_y",
+            "menu_x",
+            "menu_y",
+            "menu_step_y",
+            "content_x",
+            "content_y",
+            "content_width",
+            "content_height",
+            "actions_y",
+            "return_x",
+            "create_x",
+        ):
+            create_project[key] = int(create_project.get(key, default_create_project[key]))
+        for section_name in ("general", "lmr", "es"):
+            if not isinstance(create_project.get(section_name), dict):
+                create_project[section_name] = {}
+            for key, default_value in default_create_project[section_name].items():
+                create_project[section_name][key] = int(create_project[section_name].get(key, default_value))
+
         return layout
 
     def _get_layout_mtime(self):
@@ -2212,14 +2343,27 @@ class EditorApp:
 
     def _build_lmr_resources_yaml(self, selected_sections: list[str]) -> str:
         section_templates = {
-            "sound": "sound:\n  menu_theme: sound/menu_theme.ogg",
-            "spritecolor": "spritecolor:\n  sunset_tint: \"#FFB34766\"",
-            "variables": "variables:\n  intro_seen: false\n  love_points: 0",
+            "backdrop_bg": "backdrop_bg:\n  sample_backdrop: backdrops/sample_backdrop.png",
+            "backdrop_text": "backdrop_text:\n  sample_backdrop:\n    ru: \"Текст для backdrop\"",
             "bg": "bg:\n  ext_street_day: bg/ext_street_day.jpg",
             "cg": "cg:\n  event_intro: cg/event_intro.jpg",
-            "colors": "colors:\n  accent: \"#56F4EE\"",
+            "catalogs": "catalogs:\n  bundle: catalogs/bundle/catalog.json",
             "characters": "characters:\n  hero:\n    poses:\n      normal:\n        parts:\n          body: sprites/hero/body.png",
+            "chibis": "chibis:\n  hero_smile: chibis/hero_smile.png",
+            "collections": "collections:\n  bg:\n    sample_bg:\n      name: ext_street_day\n  music:\n    sample_track:\n      name: menu_theme",
+            "colors": "colors:\n  accent: \"#56F4EE\"",
+            "entryPoint": "entryPoint: main",
+            "help": "help:\n  credits:\n    ru: \"Титры мода\"\n  contacts:\n    ru: \"Контакты мода\"",
+            "live2d_characters": "live2d_characters:\n  hero:\n    poses:\n      idle:\n        asset: live2d/hero_idle",
+            "menu": "menu:\n  bg:\n    0:\n      asset: bg/menu_bg.jpg\n  logos:\n    0:\n      asset: default\n  tracks:\n    0:\n      asset: sound/menu_theme.ogg",
+            "particles": "particles:\n  sakura: particles/sakura.prefab",
+            "positions": "positions:\n  custom_center:\n    x: 0.5\n    y: 0.5",
             "scenarios": "scenarios:\n  main: scripts/main.txt",
+            "sizes": "sizes:\n  custom_normal:\n    x: 1.0\n    y: 1.0",
+            "sound": "sound:\n  menu_theme: sound/menu_theme.ogg",
+            "spritecolor": "spritecolor:\n  sunset_tint: \"#FFB34766\"",
+            "transitions": "transitions:\n  flash_fast:\n    preset: flash\n    duration: 0.2",
+            "variables": "variables:\n  intro_seen: false\n  love_points: 0",
         }
         lines = ["---"]
         for key in selected_sections:
@@ -2243,8 +2387,12 @@ class EditorApp:
 
     def create_mod_project(self):
         result = {"created": False}
-        width = 660
-        height = 620
+        cfg = self.layout["create_project_window"]
+        general_cfg = cfg["general"]
+        lmr_cfg = cfg["lmr"]
+        es_cfg = cfg["es"]
+        width = cfg["width"]
+        height = cfg["height"]
         window = tk.Toplevel(self.root)
         window.transient(self.root)
         window.resizable(False, False)
@@ -2264,92 +2412,197 @@ class EditorApp:
         canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         canvas.pack()
         self._draw_window_frame(canvas, width, height)
-        canvas.create_text(width // 2, 24, text="Create Project", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
 
+        panel_bg = "#101010"
+        panel_border = "#1d1d1d"
         game_var = tk.StringVar(value="lmr")
+        panel_var = tk.StringVar(value="general")
         game_path_var = tk.StringVar()
         project_id_var = tk.StringVar()
         lmr_title_var = tk.StringVar()
         lmr_version_var = tk.StringVar(value="0.1.0")
         es_display_name_var = tk.StringVar()
         cover_path_var = tk.StringVar()
-        lmr_description_widget = tk.Text(window, width=30, height=4, font=("Cascadia Mono", 9), bg="#101010", fg="#f0f0f0", insertbackground="#56f4ee", bd=0, highlightthickness=1, highlightbackground="#1d1d1d", wrap="word")
-        sections_frame = tk.Frame(window, bg="#101010", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+        target_path_var = tk.StringVar()
+
+        content_frame = tk.Frame(window, bg=panel_bg, bd=0, highlightthickness=1, highlightbackground=panel_border)
+        canvas.create_window(cfg["content_x"], cfg["content_y"], anchor="nw", window=content_frame, width=cfg["content_width"], height=cfg["content_height"])
+        general_frame = tk.Frame(content_frame, bg=panel_bg, bd=0, highlightthickness=0)
+        lmr_frame = tk.Frame(content_frame, bg=panel_bg, bd=0, highlightthickness=0)
+        es_frame = tk.Frame(content_frame, bg=panel_bg, bd=0, highlightthickness=0)
+        for frame in (general_frame, lmr_frame, es_frame):
+            frame.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+
+        lmr_description_widget = tk.Text(
+            lmr_frame,
+            width=30,
+            height=4,
+            font=("Cascadia Mono", 9),
+            bg=panel_bg,
+            fg="#f0f0f0",
+            insertbackground="#56f4ee",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=panel_border,
+            wrap="word",
+        )
+
         section_vars = {
+            "backdrop_bg": tk.BooleanVar(value=False),
+            "backdrop_text": tk.BooleanVar(value=False),
+            "bg": tk.BooleanVar(value=False),
+            "cg": tk.BooleanVar(value=False),
+            "catalogs": tk.BooleanVar(value=False),
+            "characters": tk.BooleanVar(value=False),
+            "chibis": tk.BooleanVar(value=False),
+            "collections": tk.BooleanVar(value=False),
+            "colors": tk.BooleanVar(value=False),
+            "entryPoint": tk.BooleanVar(value=True),
+            "help": tk.BooleanVar(value=False),
+            "live2d_characters": tk.BooleanVar(value=False),
+            "menu": tk.BooleanVar(value=False),
+            "particles": tk.BooleanVar(value=False),
+            "positions": tk.BooleanVar(value=False),
+            "scenarios": tk.BooleanVar(value=True),
+            "sizes": tk.BooleanVar(value=False),
             "sound": tk.BooleanVar(value=True),
             "spritecolor": tk.BooleanVar(value=False),
             "variables": tk.BooleanVar(value=True),
-            "bg": tk.BooleanVar(value=False),
-            "cg": tk.BooleanVar(value=False),
-            "colors": tk.BooleanVar(value=False),
-            "characters": tk.BooleanVar(value=False),
-            "scenarios": tk.BooleanVar(value=True),
+            "transitions": tk.BooleanVar(value=False),
         }
 
-        labels = {
-            "sound": "sound",
-            "spritecolor": "spritecolor",
-            "variables": "variables",
-            "bg": "bg",
-            "cg": "cg",
-            "colors": "colors",
-            "characters": "characters",
-            "scenarios": "scenarios",
-        }
-        current_row = 0
-        for key, label in labels.items():
-            cb = tk.Checkbutton(
-                sections_frame,
-                text=label,
-                variable=section_vars[key],
-                onvalue=True,
-                offvalue=False,
-                bg="#101010",
+        def add_canvas_label(x, y, text, color="#f0f0f0", anchor="nw"):
+            canvas.create_text(x, y, text=text, anchor=anchor, fill=color, font=("Cascadia Mono", 9, "bold"))
+
+        def add_panel_label(parent, x, y, text, color="#f0f0f0"):
+            label = tk.Label(parent, text=text, bg=panel_bg, fg=color, font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
+            label.place(x=x, y=y)
+            return label
+
+        def add_panel_text(parent, x, y, text, color="#9aa0a0", width_px=560):
+            label = tk.Label(parent, text=text, bg=panel_bg, fg=color, font=("Cascadia Mono", 8, "bold"), anchor="nw", justify="left", wraplength=width_px)
+            label.place(x=x, y=y)
+            return label
+
+        def add_panel_entry(parent, x, y, width_px, variable):
+            entry = tk.Entry(
+                parent,
+                textvariable=variable,
+                font=("Cascadia Mono", 9),
+                bg=panel_bg,
                 fg="#f0f0f0",
-                activebackground="#101010",
-                activeforeground="#56f4ee",
-                selectcolor="#101010",
-                font=("Cascadia Mono", 9, "bold"),
-                highlightthickness=0,
+                insertbackground="#56f4ee",
                 bd=0,
+                highlightthickness=1,
+                highlightbackground=panel_border,
             )
-            cb.grid(row=current_row // 2, column=current_row % 2, sticky="w", padx=10, pady=4)
-            current_row += 1
-
-        def add_label(x, y, text, color="#f0f0f0"):
-            canvas.create_text(x, y, text=text, anchor="nw", fill=color, font=("Cascadia Mono", 9, "bold"))
-
-        def add_entry(x, y, width_px, variable):
-            entry = tk.Entry(window, textvariable=variable, font=("Cascadia Mono", 9), bg="#101010", fg="#f0f0f0", insertbackground="#56f4ee", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
-            canvas.create_window(x, y, anchor="nw", window=entry, width=width_px, height=24)
+            entry.place(x=x, y=y, width=width_px, height=24)
             return entry
 
-        add_label(30, 58, "Game")
-        radio_y = 82
-        for offset, game in enumerate(SUPPORTED_MOD_GAMES):
-            state = "disabled" if game["id"] == "es2" else "normal"
-            rb = tk.Radiobutton(
-                window,
-                text=(game["name"] + (" (Locked)" if game["id"] == "es2" else "")),
-                variable=game_var,
-                value=game["id"],
-                state=state,
-                bg="#101010",
-                fg="#f0f0f0",
-                activebackground="#101010",
-                activeforeground="#56f4ee",
-                selectcolor="#101010",
-                disabledforeground="#6e6e6e",
-                font=("Cascadia Mono", 9, "bold"),
-                anchor="w",
-                bd=0,
-                highlightthickness=0,
-                justify="left",
-            )
-            canvas.create_window(30, radio_y + offset * 24, anchor="nw", window=rb, width=300, height=22)
+        toggle_rows = []
 
-        add_label(30, 164, "Game Folder")
-        game_folder_entry = add_entry(30, 188, 470, game_path_var)
+        def create_asset_toggle(parent, x, y, label, variable, *, value=True, kind="checkbox", command=None, disabled=False, width_px=180):
+            frame = tk.Frame(parent, bg=panel_bg, bd=0, highlightthickness=0)
+            frame.place(x=x, y=y, width=width_px, height=22)
+            icon_label = tk.Label(frame, bg=panel_bg, bd=0, highlightthickness=0)
+            icon_label.place(x=0, y=2, width=18, height=18)
+            text_label = tk.Label(frame, text=label, bg=panel_bg, fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
+            text_label.place(x=28, y=0, width=width_px - 28, height=22)
+            state = {"hovered": False, "disabled": disabled}
+
+            def is_checked():
+                return variable.get() == value if kind == "radio" else bool(variable.get())
+
+            def refresh():
+                checked = is_checked()
+                if state["disabled"]:
+                    icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
+                    text_color = "#6e6e6e"
+                elif state["hovered"]:
+                    icon_name = "checkbox_onmouse.png"
+                    text_color = "#56f4ee"
+                else:
+                    icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
+                    text_color = "#f0f0f0"
+                icon = self.assets.get(icon_name)
+                icon_label.configure(image=icon)
+                icon_label.image = icon
+                text_label.configure(fg=text_color)
+
+            def set_disabled(disabled_value: bool):
+                state["disabled"] = bool(disabled_value)
+                state["hovered"] = False
+                refresh()
+
+            def on_click(_event=None):
+                if state["disabled"]:
+                    return
+                if kind == "radio":
+                    variable.set(value)
+                else:
+                    variable.set(not bool(variable.get()))
+                if command:
+                    command()
+                for row in toggle_rows:
+                    row["refresh"]()
+
+            def on_enter(_event=None):
+                if state["disabled"]:
+                    return
+                state["hovered"] = True
+                refresh()
+
+            def on_leave(_event=None):
+                state["hovered"] = False
+                refresh()
+
+            for widget in (frame, icon_label, text_label):
+                widget.bind("<Button-1>", on_click)
+                widget.bind("<Enter>", on_enter)
+                widget.bind("<Leave>", on_leave)
+
+            row = {
+                "frame": frame,
+                "refresh": refresh,
+                "set_disabled": set_disabled,
+            }
+            toggle_rows.append(row)
+            refresh()
+            return row
+
+        add_canvas_label(cfg["game_label_x"], cfg["game_label_y"], "Game")
+        game_rows = []
+        for offset, game in enumerate(SUPPORTED_MOD_GAMES):
+            label = game["name"] + (" (Locked)" if game["id"] == "es2" else "")
+            row = create_asset_toggle(
+                window,
+                cfg["game_x"],
+                cfg["game_y"] + offset * cfg["game_step_y"],
+                label,
+                game_var,
+                value=game["id"],
+                kind="radio",
+                disabled=(game["id"] == "es2"),
+                width_px=300,
+            )
+            game_rows.append(row)
+
+        add_canvas_label(cfg["menu_label_x"], cfg["menu_label_y"], "Project Settings")
+        panel_rows = {}
+
+        def show_project_panel(name: str):
+            panel_var.set(name)
+            {"general": general_frame, "lmr": lmr_frame, "es": es_frame}[name].tkraise()
+            for row in toggle_rows:
+                row["refresh"]()
+
+        panel_rows["general"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"], "Common", panel_var, value="general", kind="radio", command=lambda: show_project_panel("general"), width_px=140)
+        panel_rows["lmr"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"] + cfg["menu_step_y"], "LMR", panel_var, value="lmr", kind="radio", command=lambda: show_project_panel("lmr"), width_px=140)
+        panel_rows["es"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"] + cfg["menu_step_y"] * 2, "Everlasting Summer", panel_var, value="es", kind="radio", command=lambda: show_project_panel("es"), width_px=160)
+
+        add_panel_label(general_frame, general_cfg["game_folder_label_x"], general_cfg["game_folder_label_y"], "Game Folder")
+        game_folder_entry = add_panel_entry(general_frame, general_cfg["game_folder_entry_x"], general_cfg["game_folder_entry_y"], general_cfg["game_folder_entry_width"], game_path_var)
 
         def browse_game_folder():
             folder = filedialog.askdirectory(title="Select game folder")
@@ -2358,24 +2611,29 @@ class EditorApp:
                 window.lift()
                 window.focus_force()
 
-        self._create_composite_button(window, canvas, 516, 188, "Browse", 72, 24, browse_game_folder)
+        browse_game_button = tk.Button(general_frame, text="Browse", command=browse_game_folder, font=("Cascadia Mono", 8, "bold"), bg=panel_bg, fg="#56f4ee", activebackground=panel_bg, activeforeground="#ffffff", bd=1, relief="flat", highlightthickness=1, highlightbackground=panel_border)
+        browse_game_button.place(x=general_cfg["browse_x"], y=general_cfg["browse_y"], width=general_cfg["browse_width"], height=24)
 
-        add_label(30, 226, "Project ID")
-        project_id_entry = add_entry(30, 250, 220, project_id_var)
-        add_label(270, 226, "Allowed: latin, digits, _", "#9aa0a0")
+        add_panel_label(general_frame, general_cfg["project_id_label_x"], general_cfg["project_id_label_y"], "Project ID")
+        project_id_entry = add_panel_entry(general_frame, general_cfg["project_id_entry_x"], general_cfg["project_id_entry_y"], general_cfg["project_id_entry_width"], project_id_var)
+        add_panel_text(general_frame, general_cfg["project_id_hint_x"], general_cfg["project_id_hint_y"], "Allowed: latin, digits and _", "#9aa0a0", 240)
+        add_panel_label(general_frame, general_cfg["target_label_x"], general_cfg["target_label_y"], "Target Folder")
+        target_label = tk.Label(general_frame, textvariable=target_path_var, bg=panel_bg, fg="#56f4ee", font=("Cascadia Mono", 8, "bold"), anchor="nw", justify="left", wraplength=560)
+        target_label.place(x=general_cfg["target_value_x"], y=general_cfg["target_value_y"], width=general_cfg["target_value_width"], height=general_cfg["target_value_height"])
+        add_panel_text(general_frame, general_cfg["note_x"], general_cfg["note_y"], "Choose the game first, then fill the game folder and project id.", "#d7d9d7", 560)
 
-        add_label(30, 292, "LMR Title")
-        lmr_title_entry = add_entry(30, 316, 270, lmr_title_var)
-        add_label(320, 292, "Version")
-        lmr_version_entry = add_entry(320, 316, 120, lmr_version_var)
-        add_label(30, 350, "LMR Description")
-        canvas.create_window(30, 374, anchor="nw", window=lmr_description_widget, width=410, height=74)
+        add_panel_label(lmr_frame, lmr_cfg["title_label_x"], lmr_cfg["title_label_y"], "LMR Title")
+        lmr_title_entry = add_panel_entry(lmr_frame, lmr_cfg["title_entry_x"], lmr_cfg["title_entry_y"], lmr_cfg["title_entry_width"], lmr_title_var)
+        add_panel_label(lmr_frame, lmr_cfg["version_label_x"], lmr_cfg["version_label_y"], "Version")
+        lmr_version_entry = add_panel_entry(lmr_frame, lmr_cfg["version_entry_x"], lmr_cfg["version_entry_y"], lmr_cfg["version_entry_width"], lmr_version_var)
+        add_panel_label(lmr_frame, lmr_cfg["description_label_x"], lmr_cfg["description_label_y"], "LMR Description")
+        lmr_description_widget.place(x=lmr_cfg["description_x"], y=lmr_cfg["description_y"], width=lmr_cfg["description_width"], height=lmr_cfg["description_height"])
 
-        add_label(460, 292, "Cover")
-        cover_entry = add_entry(460, 316, 128, cover_path_var)
-        add_label(460, 350, "Cover warning:", "#56f4ee")
-        add_label(460, 372, "max 2 MB", "#d7d9d7")
-        add_label(460, 394, "recommended 445x200", "#d7d9d7")
+        add_panel_label(lmr_frame, lmr_cfg["cover_label_x"], lmr_cfg["cover_label_y"], "Cover")
+        cover_entry = add_panel_entry(lmr_frame, lmr_cfg["cover_entry_x"], lmr_cfg["cover_entry_y"], lmr_cfg["cover_entry_width"], cover_path_var)
+        add_panel_label(lmr_frame, lmr_cfg["cover_warning_label_x"], lmr_cfg["cover_warning_label_y"], "Cover warning:", "#56f4ee")
+        add_panel_text(lmr_frame, lmr_cfg["cover_warning_1_x"], lmr_cfg["cover_warning_1_y"], "max 2 MB", "#d7d9d7", 130)
+        add_panel_text(lmr_frame, lmr_cfg["cover_warning_2_x"], lmr_cfg["cover_warning_2_y"], "recommended 445x200", "#d7d9d7", 130)
 
         def browse_cover_file():
             path = filedialog.askopenfilename(
@@ -2404,29 +2662,71 @@ class EditorApp:
             window.lift()
             window.focus_force()
 
-        self._create_composite_button(window, canvas, 460, 420, "Choose", 70, 24, browse_cover_file)
+        browse_cover_button = tk.Button(lmr_frame, text="Choose", command=browse_cover_file, font=("Cascadia Mono", 8, "bold"), bg=panel_bg, fg="#56f4ee", activebackground=panel_bg, activeforeground="#ffffff", bd=1, relief="flat", highlightthickness=1, highlightbackground=panel_border)
+        browse_cover_button.place(x=lmr_cfg["cover_button_x"], y=lmr_cfg["cover_button_y"], width=lmr_cfg["cover_button_width"], height=24)
 
-        add_label(30, 466, "resources.yaml sections")
-        canvas.create_window(30, 490, anchor="nw", window=sections_frame, width=300, height=88)
+        add_panel_label(lmr_frame, lmr_cfg["resources_label_x"], lmr_cfg["resources_label_y"], "resources.yaml sections")
+        add_panel_text(lmr_frame, lmr_cfg["resources_note_x"], lmr_cfg["resources_note_y"], "Choose base nodes for the initial resources.yaml template.", "#9aa0a0", 560)
+        section_labels = [
+            ("backdrop_bg", "backdrop_bg"),
+            ("backdrop_text", "backdrop_text"),
+            ("bg", "bg"),
+            ("cg", "cg"),
+            ("catalogs", "catalogs"),
+            ("characters", "characters"),
+            ("chibis", "chibis"),
+            ("collections", "collections"),
+            ("colors", "colors"),
+            ("entryPoint", "entryPoint"),
+            ("help", "help"),
+            ("live2d_characters", "live2d_characters"),
+            ("menu", "menu"),
+            ("particles", "particles"),
+            ("positions", "positions"),
+            ("scenarios", "scenarios"),
+            ("sizes", "sizes"),
+            ("sound", "sound"),
+            ("spritecolor", "spritecolor"),
+            ("transitions", "transitions"),
+            ("variables", "variables"),
+        ]
+        section_rows = []
+        for index, (key, label) in enumerate(section_labels):
+            row_x = lmr_cfg["resources_x"] + (index % 3) * lmr_cfg["resources_column_width"]
+            row_y = lmr_cfg["resources_y"] + (index // 3) * lmr_cfg["resources_row_height"]
+            section_rows.append(create_asset_toggle(lmr_frame, row_x, row_y, label, section_vars[key], width_px=182))
 
-        add_label(350, 466, "ES Display Name")
-        es_display_entry = add_entry(350, 490, 238, es_display_name_var)
-        add_label(350, 522, "Shown in the in-game mod list", "#9aa0a0")
+        add_panel_label(es_frame, es_cfg["display_label_x"], es_cfg["display_label_y"], "ES Display Name")
+        es_display_entry = add_panel_entry(es_frame, es_cfg["display_entry_x"], es_cfg["display_entry_y"], es_cfg["display_entry_width"], es_display_name_var)
+        add_panel_text(es_frame, es_cfg["note_1_x"], es_cfg["note_1_y"], "This name will be shown in the in-game mod list.", "#9aa0a0", 420)
+        add_panel_text(es_frame, es_cfg["note_2_x"], es_cfg["note_2_y"], "The generated .rpy file will be saved in UTF-8 inside game/mods/<project_id>.", "#d7d9d7", 520)
+
+        def update_target_path():
+            project_id = project_id_var.get().strip() or "<project_id>"
+            if game_var.get() == "lmr":
+                target_path_var.set(f"Love, Money, Rock'n'Roll_Data/mods/{project_id}")
+            else:
+                target_path_var.set(f"game/mods/{project_id}")
 
         def update_form_state(*_args):
             is_lmr = game_var.get() == "lmr"
-            normal_state = "normal" if is_lmr else "disabled"
+            lmr_state = "normal" if is_lmr else "disabled"
             es_state = "normal" if game_var.get() == "es" else "disabled"
-            for widget in (lmr_description_widget,):
-                widget.configure(state=normal_state)
-            lmr_title_entry.configure(state=normal_state)
-            lmr_version_entry.configure(state=normal_state)
-            cover_entry.configure(state=normal_state)
+            for widget in (lmr_description_widget, lmr_title_entry, lmr_version_entry, cover_entry, browse_cover_button):
+                widget.configure(state=lmr_state)
             es_display_entry.configure(state=es_state)
-            for child in sections_frame.winfo_children():
-                child.configure(state=normal_state)
+            panel_rows["lmr"]["set_disabled"](not is_lmr)
+            panel_rows["es"]["set_disabled"](game_var.get() != "es")
+            for row in section_rows:
+                row["set_disabled"](not is_lmr)
+            if panel_var.get() == "lmr" and not is_lmr:
+                show_project_panel("general")
+            elif panel_var.get() == "es" and game_var.get() != "es":
+                show_project_panel("general")
+            update_target_path()
+
         game_var.trace_add("write", update_form_state)
-        update_form_state()
+        project_id_var.trace_add("write", lambda *_args: update_target_path())
 
         def sync_project_id(*_args):
             if project_id_var.get().strip():
@@ -2486,7 +2786,7 @@ class EditorApp:
                 if not title:
                     messagebox.showwarning("Missing Title", "Enter title for meta.yaml.")
                     return
-                selected_sections = [key for key, variable in section_vars.items() if variable.get()]
+                selected_sections = [key for key, _label in section_labels if section_vars[key].get()]
                 resources_yaml = self._build_lmr_resources_yaml(selected_sections)
                 cover_rel_path = None
                 cover_source = cover_path_var.get().strip()
@@ -2518,8 +2818,11 @@ class EditorApp:
             close_dialog()
             self._set_project_dir(project_dir)
 
-        self._create_composite_button(window, canvas, 360, 582, "Return", 80, 24, close_dialog)
-        self._create_composite_button(window, canvas, 500, 582, "Create", 80, 24, create_project_action)
+        update_form_state()
+        show_project_panel("general")
+
+        self._create_composite_button(window, canvas, cfg["return_x"], cfg["actions_y"], "Return", 80, 24, close_dialog)
+        self._create_composite_button(window, canvas, cfg["create_x"], cfg["actions_y"], "Create", 80, 24, create_project_action)
         window.bind("<Escape>", lambda _e: close_dialog())
         window.grab_set()
         window.deiconify()
