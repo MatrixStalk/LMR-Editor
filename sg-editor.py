@@ -736,6 +736,7 @@ class EditorApp:
             xscrollcommand=self._sync_editor_horizontal_views,
         )
         self.editor_text.bind("<Button-1>", self._focus_editor_widget)
+        self.editor_text.bind("<Tab>", self._insert_editor_spaces)
         self.editor_text.bind("<KeyPress>", self._handle_shortcut_keypress)
         self.editor_text.bind("<KeyRelease>", self._handle_editor_key_release)
         self.editor_text.bind("<ButtonRelease>", lambda _e: self._update_status(refresh_lines=False))
@@ -2343,32 +2344,34 @@ class EditorApp:
 
     def _build_lmr_resources_yaml(self, selected_sections: list[str]) -> str:
         section_templates = {
-            "backdrop_bg": "backdrop_bg:\n  sample_backdrop: backdrops/sample_backdrop.png",
-            "backdrop_text": "backdrop_text:\n  sample_backdrop:\n    ru: \"Текст для backdrop\"",
-            "bg": "bg:\n  ext_street_day: bg/ext_street_day.jpg",
-            "cg": "cg:\n  event_intro: cg/event_intro.jpg",
-            "catalogs": "catalogs:\n  bundle: catalogs/bundle/catalog.json",
-            "characters": "characters:\n  hero:\n    poses:\n      normal:\n        parts:\n          body: sprites/hero/body.png",
-            "chibis": "chibis:\n  hero_smile: chibis/hero_smile.png",
-            "collections": "collections:\n  bg:\n    sample_bg:\n      name: ext_street_day\n  music:\n    sample_track:\n      name: menu_theme",
-            "colors": "colors:\n  accent: \"#56F4EE\"",
+            "backdrop_bg": "backdrop_bg:\n    sample_backdrop: backdrops/sample_backdrop.png",
+            "backdrop_text": "backdrop_text:\n    sample_backdrop:\n        ru: \"Текст для backdrop\"",
+            "bg": "bg:\n    ext_street_day: bg/ext_street_day.jpg",
+            "cg": "cg:\n    event_intro: cg/event_intro.jpg",
+            "catalogs": "catalogs:\n    bundle: catalogs/bundle/catalog.json",
+            "characters": "characters:\n    hero:\n        poses:\n            normal:\n                parts:\n                    body: sprites/hero/body.png",
+            "chibis": "chibis:\n    hero_smile: chibis/hero_smile.png",
+            "collections": "collections:\n    bg:\n        sample_bg:\n            name: ext_street_day\n    music:\n        sample_track:\n            name: menu_theme",
+            "colors": "colors:\n    accent: \"#56F4EE\"",
             "entryPoint": "entryPoint: main",
-            "help": "help:\n  credits:\n    ru: \"Титры мода\"\n  contacts:\n    ru: \"Контакты мода\"",
-            "live2d_characters": "live2d_characters:\n  hero:\n    poses:\n      idle:\n        asset: live2d/hero_idle",
-            "menu": "menu:\n  bg:\n    0:\n      asset: bg/menu_bg.jpg\n  logos:\n    0:\n      asset: default\n  tracks:\n    0:\n      asset: sound/menu_theme.ogg",
-            "particles": "particles:\n  sakura: particles/sakura.prefab",
-            "positions": "positions:\n  custom_center:\n    x: 0.5\n    y: 0.5",
-            "scenarios": "scenarios:\n  main: scripts/main.txt",
-            "sizes": "sizes:\n  custom_normal:\n    x: 1.0\n    y: 1.0",
-            "sound": "sound:\n  menu_theme: sound/menu_theme.ogg",
-            "spritecolor": "spritecolor:\n  sunset_tint: \"#FFB34766\"",
-            "transitions": "transitions:\n  flash_fast:\n    preset: flash\n    duration: 0.2",
-            "variables": "variables:\n  intro_seen: false\n  love_points: 0",
+            "help": "help:\n    credits:\n        ru: \"Титры мода\"\n    contacts:\n        ru: \"Контакты мода\"",
+            "live2d_characters": "live2d_characters:\n    hero:\n        poses:\n            idle:\n                asset: live2d/hero_idle",
+            "menu": "menu:\n    bg:\n        0:\n            asset: bg/menu_bg.jpg\n    logos:\n        0:\n            asset: default\n    tracks:\n        0:\n            asset: sound/menu_theme.ogg",
+            "particles": "particles:\n    sakura: particles/sakura.prefab",
+            "positions": "positions:\n    custom_center:\n        x: 0.5\n        y: 0.5",
+            "scenarios": "scenarios:\n    main: scripts/main.txt",
+            "sizes": "sizes:\n    custom_normal:\n        x: 1.0\n        y: 1.0",
+            "sound": "sound:\n    menu_theme: sound/menu_theme.ogg",
+            "spritecolor": "spritecolor:\n    sunset_tint: \"#FFB34766\"",
+            "transitions": "transitions:\n    flash_fast:\n        preset: flash\n        duration: 0.2",
+            "variables": "variables:\n    intro_seen: false\n    love_points: 0",
         }
         lines = ["---"]
         for key in selected_sections:
             template = section_templates.get(key)
             if template:
+                if len(lines) > 1:
+                    lines.append("")
                 lines.append(template)
         return "\n".join(lines).strip() + "\n"
 
@@ -2376,14 +2379,14 @@ class EditorApp:
         lines = [
             "---",
             "title:",
-            f"  ru: {json.dumps(title, ensure_ascii=False)}",
+            f"    ru: {json.dumps(title, ensure_ascii=False)}",
             "description:",
-            f"  ru: {json.dumps(description, ensure_ascii=False)}",
+            f"    ru: {json.dumps(description, ensure_ascii=False)}",
             f"version: {json.dumps(version, ensure_ascii=False)}",
         ]
         if cover_rel_path:
             lines.append(f"cover: {json.dumps(cover_rel_path, ensure_ascii=False)}")
-        return "\n".join(lines) + "\n"
+        return "\n".join(lines[:2] + [lines[2], "", lines[3], lines[4]] + lines[5:]) + "\n"
 
     def create_mod_project(self):
         result = {"created": False}
