@@ -89,6 +89,32 @@ def load_app_settings():
     return merged
 
 
+def generate_build_number() -> str:
+    if getattr(sys, "frozen", False):
+        source_path = Path(sys.executable)
+    else:
+        source_path = Path(__file__).resolve()
+
+    try:
+        modified_at = time.localtime(source_path.stat().st_mtime)
+    except OSError:
+        modified_at = time.localtime()
+
+    timestamp_formula = (
+        modified_at.tm_year * 100000000
+        + modified_at.tm_mon * 1000000
+        + modified_at.tm_mday * 10000
+        + modified_at.tm_hour * 100
+        + modified_at.tm_min
+    )
+    pseudo_random = (
+        timestamp_formula * 73
+        + modified_at.tm_sec * 197
+        + modified_at.tm_yday * 19
+    ) % 90000
+    return f"{pseudo_random + 10000:05d}"
+
+
 DEFAULT_LAYOUT = {
     "window": {"width": 1919, "height": 1079, "drag_top_height": 52},
     "drag_area": {"x": 94, "y": 22, "width": 1720, "height": 92},
@@ -190,6 +216,7 @@ DEFAULT_LAYOUT = {
 RPC_CONFIG = load_discord_rpc_config()
 APP_DISPLAY_NAME = RPC_CONFIG["app_display_name"]
 APP_SETTINGS = load_app_settings()
+APP_BUILD_NUMBER = generate_build_number()
 
 
 class DiscordPresenceManager:
@@ -1742,7 +1769,7 @@ class EditorApp:
         if "sg_logo.png" in self.assets:
             x, y = self._content_anchor(220, 426)
             self.settings_content_items.append(self.settings_canvas.create_image(x, y, image=self.assets["sg_logo.png"], anchor="nw"))
-        self._render_text_block(["SGME Build 15391"], 118, 444, font=("Cascadia Mono", 14, "bold"))
+        self._render_text_block([f"SGME Build {APP_BUILD_NUMBER}"], 118, 444, font=("Cascadia Mono", 14, "bold"))
         self._render_text_block(
             [
                 "Written on Python Libraries",
@@ -1899,7 +1926,7 @@ class EditorApp:
             texts["bottom_y"],
             text="\n".join(
                 [
-                    "SGME Build ALPHA",
+                    f"SGME Build {APP_BUILD_NUMBER}",
                     "Written on Python Libraries",
                     "Supported games:",
                     "ES, LMR, ES:2(Later)",
