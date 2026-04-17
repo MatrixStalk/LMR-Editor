@@ -2695,7 +2695,7 @@ class EditorApp:
         folder_note = canvas.create_text(
             cfg["folder_note_x"],
             cfg["folder_note_y"],
-            text="Only one folder inside project.\nLeave empty to create file in project root.",
+            text="Leave empty to create file in project root.",
             anchor="nw",
             fill="#9aa0a0",
             font=("Cascadia Mono", 8, "bold"),
