@@ -905,9 +905,6 @@ class EditorApp:
         project_menu.add_command(label="Create Project", command=self.create_mod_project)
         project_menu.add_command(label="Create Project File", command=self.create_project_text_file)
         project_menu.add_command(label="LMR Bundle Extractor", command=self.open_lmr_bundle_extractor)
-        if self._detect_project_type() == "lmr":
-            project_menu.add_separator()
-            project_menu.add_cascade(label="LMR Resource Manager", menu=self._build_lmr_resource_manager_menu(project_menu))
         project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
@@ -916,9 +913,6 @@ class EditorApp:
         file_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         file_menu.add_command(label="Save", command=self.save_current_file)
         file_menu.add_command(label="Export ZIP", command=self.export_zip)
-        if self._detect_project_type() == "lmr":
-            file_menu.add_separator()
-            file_menu.add_cascade(label="LMR Resource Manager", menu=self._build_lmr_resource_manager_menu(file_menu))
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
