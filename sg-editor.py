@@ -1568,6 +1568,16 @@ class EditorApp:
             pass
         self.editor_text.focus_set()
 
+    def _insert_editor_spaces(self, _event=None):
+        if self.editor_text is None:
+            return "break"
+        try:
+            self.editor_text.insert("insert", " " * 4)
+        except tk.TclError:
+            return "break"
+        self._handle_editor_key_release()
+        return "break"
+
     def _save_shortcut(self, _event=None):
         self.save_current_file()
         self._focus_editor_widget()
