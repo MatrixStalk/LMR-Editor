@@ -843,6 +843,7 @@ class EditorApp:
 
         project_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         project_menu.add_command(label="Create Project", command=self.create_mod_project)
+        project_menu.add_command(label="Create Project File", command=self.create_project_text_file)
         project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
@@ -2452,6 +2453,280 @@ class EditorApp:
         if cover_rel_path:
             lines.append(f"cover: {json.dumps(cover_rel_path, ensure_ascii=False)}")
         return "\n".join(lines[:2] + [lines[2], "", lines[3], lines[4]] + lines[5:]) + "\n"
+
+    def _detect_project_type(self) -> str | None:
+        if self.project_dir is None:
+            return None
+        if (self.project_dir / "resources.yaml").exists() and (self.project_dir / "meta.yaml").exists():
+            return "lmr"
+        if any(path.suffix.lower() == ".rpy" for path in self.project_dir.iterdir() if path.is_file()):
+            return "es"
+        return None
+
+    def _normalize_project_file_name(self, name: str, extension: str) -> str:
+        cleaned = re.sub(r'[<>:"/\\\\|?*]+', "_", name.strip())
+        if not cleaned:
+            return ""
+        if not cleaned.lower().endswith(extension.lower()):
+            cleaned += extension
+        return cleaned
+
+    def _upsert_lmr_scenario_entry(self, scenario_name: str, scenario_rel_path: str):
+        if self.project_dir is None:
+            return
+        resources_path = self.project_dir / "resources.yaml"
+        if resources_path.exists():
+            content = resources_path.read_text(encoding="utf-8")
+        else:
+            content = "---\n"
+
+        lines = content.splitlines()
+        scenario_header = None
+        for index, line in enumerate(lines):
+            if line.strip() == "scenarios:":
+                scenario_header = index
+                break
+
+        new_entry = f"    {scenario_name}: {scenario_rel_path}"
+
+        if scenario_header is None:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.extend(["scenarios:", new_entry])
+        else:
+            block_end = len(lines)
+            for index in range(scenario_header + 1, len(lines)):
+                candidate = lines[index]
+                if candidate and not candidate.startswith(" "):
+                    block_end = index
+                    break
+
+            replaced = False
+            for index in range(scenario_header + 1, block_end):
+                if lines[index].strip().startswith(f"{scenario_name}:"):
+                    lines[index] = new_entry
+                    replaced = True
+                    break
+            if not replaced:
+                insert_at = block_end
+                while insert_at > scenario_header + 1 and lines[insert_at - 1] == "":
+                    insert_at -= 1
+                lines.insert(insert_at, new_entry)
+
+        resources_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+    def create_project_text_file(self):
+        if self.project_dir is None:
+            messagebox.showwarning("No project", "Open a project first.", parent=self.root)
+            return
+
+        project_type = self._detect_project_type()
+        if project_type not in {"lmr", "es"}:
+            messagebox.showwarning("Unknown project", "Could not detect project type.", parent=self.root)
+            return
+
+        width = 520
+        height = 320 if project_type == "lmr" else 250
+        window = tk.Toplevel(self.root)
+        window.transient(self.root)
+        window.resizable(False, False)
+        window.configure(bg=TRANSPARENT_COLOR)
+        window.overrideredirect(True)
+        try:
+            window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
+        except tk.TclError:
+            pass
+        try:
+            window.wm_attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        window.geometry(
+            f"{width}x{height}+{self.root.winfo_x() + max(0, (self.layout['window']['width'] - width) // 2)}+{self.root.winfo_y() + max(0, (self.layout['window']['height'] - height) // 2)}"
+        )
+
+        canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
+        canvas.pack()
+        self._draw_window_frame(canvas, width, height)
+        canvas.create_text(width // 2, 20, text="Create Project File", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+
+        kind_var = tk.StringVar(value="scenario_txt" if project_type == "lmr" else "rpy_script")
+        name_var = tk.StringVar()
+        folder_var = tk.StringVar()
+        technical_name_var = tk.StringVar()
+
+        panel_bg = "#101010"
+        panel_border = "#1d1d1d"
+
+        def add_label(x, y, text, color="#f0f0f0"):
+            canvas.create_text(x, y, text=text, anchor="nw", fill=color, font=("Cascadia Mono", 9, "bold"))
+
+        def add_entry(x, y, width_px, variable):
+            entry = tk.Entry(
+                window,
+                textvariable=variable,
+                font=("Cascadia Mono", 9),
+                bg=panel_bg,
+                fg="#f0f0f0",
+                insertbackground="#56f4ee",
+                bd=0,
+                highlightthickness=1,
+                highlightbackground=panel_border,
+            )
+            canvas.create_window(x, y, anchor="nw", window=entry, width=width_px, height=24)
+            return entry
+
+        toggle_rows = []
+
+        def create_asset_toggle(x, y, label, variable, value, width_px=220):
+            frame = tk.Frame(window, bg=panel_bg, bd=0, highlightthickness=0)
+            frame.place(x=x, y=y, width=width_px, height=22)
+            text_label = tk.Label(frame, text=label, bg=panel_bg, fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
+            text_label.place(x=0, y=0, width=width_px - 28, height=22)
+            icon_label = tk.Label(frame, bg=panel_bg, bd=0, highlightthickness=0)
+            icon_label.place(x=width_px - 18, y=2, width=18, height=18)
+            state = {"hovered": False}
+
+            def refresh():
+                checked = variable.get() == value
+                icon_name = "checkbox_onmouse.png" if state["hovered"] else ("checkbox_on.png" if checked else "checkbox_off.png")
+                text_label.configure(fg="#56f4ee" if state["hovered"] else "#f0f0f0")
+                icon = self.assets.get(icon_name)
+                icon_label.configure(image=icon)
+                icon_label.image = icon
+
+            def on_click(_event=None):
+                variable.set(value)
+                update_form_state()
+                for row in toggle_rows:
+                    row()
+
+            def on_enter(_event=None):
+                state["hovered"] = True
+                refresh()
+
+            def on_leave(_event=None):
+                state["hovered"] = False
+                refresh()
+
+            for widget in (frame, text_label, icon_label):
+                widget.bind("<Button-1>", on_click)
+                widget.bind("<Enter>", on_enter)
+                widget.bind("<Leave>", on_leave)
+
+            toggle_rows.append(refresh)
+            refresh()
+
+        add_label(28, 56, "Type")
+        if project_type == "lmr":
+            create_asset_toggle(28, 82, "Scenario TXT", kind_var, "scenario_txt")
+            create_asset_toggle(28, 108, "YAML (resources signature)", kind_var, "yaml_resources", width_px=260)
+            create_asset_toggle(28, 134, "YAML (meta signature)", kind_var, "yaml_meta", width_px=240)
+        else:
+            create_asset_toggle(28, 82, "Ren'Py Script (.rpy)", kind_var, "rpy_script", width_px=220)
+
+        add_label(28, 176 if project_type == "lmr" else 120, "File Name")
+        name_entry = add_entry(28, 200 if project_type == "lmr" else 144, 300, name_var)
+
+        add_label(28, 236, "Technical Name", "#56f4ee")
+        technical_name_entry = add_entry(28, 260, 180, technical_name_var)
+        add_label(28, 236, "Scenario Folder (optional)", "#56f4ee")
+        folder_entry = add_entry(250, 260, 180, folder_var)
+        folder_note = canvas.create_text(
+            28,
+            290,
+            text="Only one folder inside project.\nLeave empty to create file in project root.",
+            anchor="nw",
+            fill="#9aa0a0",
+            font=("Cascadia Mono", 8, "bold"),
+        )
+
+        def update_form_state(*_args):
+            is_scenario = project_type == "lmr" and kind_var.get() == "scenario_txt"
+            folder_entry.configure(state=("normal" if is_scenario else "disabled"))
+            technical_name_entry.configure(state=("normal" if is_scenario else "disabled"))
+            canvas.itemconfigure(folder_note, state=("normal" if is_scenario else "hidden"))
+            canvas.itemconfigure(technical_name_label, state=("normal" if is_scenario else "hidden"))
+            canvas.itemconfigure(folder_label, state=("normal" if is_scenario else "hidden"))
+            for refresh in toggle_rows:
+                refresh()
+
+        def close_dialog():
+            try:
+                window.grab_release()
+            except tk.TclError:
+                pass
+            window.destroy()
+            self._focus_editor_widget()
+
+        def create_action():
+            raw_name = name_var.get().strip()
+            if not raw_name:
+                messagebox.showwarning("Missing Name", "Enter a file name.", parent=window)
+                return
+
+            if project_type == "lmr":
+                file_kind = kind_var.get()
+                extension = ".txt" if file_kind == "scenario_txt" else ".yaml"
+            else:
+                file_kind = "rpy_script"
+                extension = ".rpy"
+
+            file_name = self._normalize_project_file_name(raw_name, extension)
+            if not file_name:
+                messagebox.showwarning("Invalid Name", "Enter a valid file name.", parent=window)
+                return
+
+            target_dir = self.project_dir
+            scenario_rel_path = file_name
+
+            if project_type == "lmr" and file_kind == "scenario_txt":
+                folder_name = folder_var.get().strip()
+                if folder_name:
+                    if "/" in folder_name or "\\" in folder_name:
+                        messagebox.showwarning("Invalid Folder", "Only one folder name is allowed.", parent=window)
+                        return
+                    folder_name = re.sub(r'[<>:"/\\\\|?*]+', "_", folder_name)
+                    if not folder_name:
+                        messagebox.showwarning("Invalid Folder", "Enter a valid folder name.", parent=window)
+                        return
+                    target_dir = self.project_dir / folder_name
+                    scenario_rel_path = f"{folder_name}\\{file_name}"
+
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target_path = target_dir / file_name
+            if target_path.exists():
+                messagebox.showwarning("File Exists", f"File already exists:\n{target_path}", parent=window)
+                return
+
+            if project_type == "lmr":
+                if file_kind == "yaml_resources":
+                    content = self._build_lmr_resources_yaml([])
+                elif file_kind == "yaml_meta":
+                    content = self._build_lmr_meta_yaml("", "", "0.1.0", None)
+                else:
+                    content = ""
+            else:
+                content = ""
+
+            target_path.write_text(content, encoding="utf-8")
+
+            if project_type == "lmr" and file_kind == "scenario_txt":
+                self._upsert_lmr_scenario_entry(Path(file_name).stem, scenario_rel_path)
+
+            self._reload_project_files()
+            close_dialog()
+            self.open_file(target_path)
+
+        update_form_state()
+        self._create_composite_button(window, canvas, 270, height - 44, "Return", 80, 24, close_dialog)
+        self._create_composite_button(window, canvas, 390, height - 44, "Create", 80, 24, create_action)
+        name_entry.focus_set()
+        window.bind("<Escape>", lambda _e: close_dialog())
+        window.grab_set()
+        window.deiconify()
+        window.lift()
+        window.focus_force()
+        window.wait_window()
 
     def create_mod_project(self, initial_state=None):
         result = {"created": False}
