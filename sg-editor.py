@@ -2627,9 +2627,9 @@ class EditorApp:
         add_label(28, 176 if project_type == "lmr" else 120, "File Name")
         name_entry = add_entry(28, 200 if project_type == "lmr" else 144, 300, name_var)
 
-        add_label(28, 236, "Technical Name", "#56f4ee")
+        technical_name_label = canvas.create_text(28, 236, text="Technical Name", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
         technical_name_entry = add_entry(28, 260, 180, technical_name_var)
-        add_label(28, 236, "Scenario Folder (optional)", "#56f4ee")
+        folder_label = canvas.create_text(250, 236, text="Scenario Folder (optional)", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
         folder_entry = add_entry(250, 260, 180, folder_var)
         folder_note = canvas.create_text(
             28,
@@ -2678,8 +2678,15 @@ class EditorApp:
 
             target_dir = self.project_dir
             scenario_rel_path = file_name
+            scenario_key = Path(file_name).stem
 
             if project_type == "lmr" and file_kind == "scenario_txt":
+                raw_technical_name = technical_name_var.get().strip()
+                if raw_technical_name:
+                    scenario_key = self._slugify_project_id(raw_technical_name)
+                if not scenario_key:
+                    messagebox.showwarning("Invalid Technical Name", "Enter a valid technical name.", parent=window)
+                    return
                 folder_name = folder_var.get().strip()
                 if folder_name:
                     if "/" in folder_name or "\\" in folder_name:
@@ -2711,7 +2718,7 @@ class EditorApp:
             target_path.write_text(content, encoding="utf-8")
 
             if project_type == "lmr" and file_kind == "scenario_txt":
-                self._upsert_lmr_scenario_entry(Path(file_name).stem, scenario_rel_path)
+                self._upsert_lmr_scenario_entry(scenario_key, scenario_rel_path)
 
             self._reload_project_files()
             close_dialog()
