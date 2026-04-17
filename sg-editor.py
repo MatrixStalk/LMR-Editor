@@ -229,6 +229,8 @@ DEFAULT_LAYOUT = {
         "menu_x": 30,
         "menu_y": 220,
         "menu_step_y": 28,
+        "game_item_width": 300,
+        "menu_item_width": 170,
         "content_x": 194,
         "content_y": 286,
         "content_width": 614,
@@ -244,7 +246,7 @@ DEFAULT_LAYOUT = {
             "game_folder_entry_width": 430,
             "browse_x": 462,
             "browse_y": 44,
-            "browse_width": 90,
+            "browse_width": 72,
             "project_id_label_x": 18,
             "project_id_label_y": 90,
             "project_id_entry_x": 18,
@@ -291,7 +293,7 @@ DEFAULT_LAYOUT = {
             "cover_warning_2_y": 124,
             "cover_button_x": 448,
             "cover_button_y": 152,
-            "cover_button_width": 90,
+            "cover_button_width": 72,
             "resources_label_x": 18,
             "resources_label_y": 186,
             "resources_note_x": 18,
@@ -2278,6 +2280,8 @@ class EditorApp:
             "menu_x",
             "menu_y",
             "menu_step_y",
+            "game_item_width",
+            "menu_item_width",
             "content_x",
             "content_y",
             "content_width",
@@ -2587,13 +2591,17 @@ class EditorApp:
 
         toggle_rows = []
 
-        def create_asset_toggle(parent, x, y, label, variable, *, value=True, kind="checkbox", command=None, disabled=False, width_px=180):
+        def create_asset_toggle(parent, x, y, label, variable, *, value=True, kind="checkbox", command=None, disabled=False, width_px=180, icon_side="left"):
             frame = tk.Frame(parent, bg=panel_bg, bd=0, highlightthickness=0)
             frame.place(x=x, y=y, width=width_px, height=22)
             icon_label = tk.Label(frame, bg=panel_bg, bd=0, highlightthickness=0)
-            icon_label.place(x=0, y=2, width=18, height=18)
             text_label = tk.Label(frame, text=label, bg=panel_bg, fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
-            text_label.place(x=28, y=0, width=width_px - 28, height=22)
+            if icon_side == "right":
+                text_label.place(x=0, y=0, width=width_px - 28, height=22)
+                icon_label.place(x=width_px - 18, y=2, width=18, height=18)
+            else:
+                icon_label.place(x=0, y=2, width=18, height=18)
+                text_label.place(x=28, y=0, width=width_px - 28, height=22)
             state = {"hovered": False, "disabled": disabled}
 
             def is_checked():
@@ -2669,7 +2677,7 @@ class EditorApp:
                 value=game["id"],
                 kind="radio",
                 disabled=(game["id"] == "es2"),
-                width_px=300,
+                width_px=cfg["game_item_width"],
             )
             game_rows.append(row)
 
@@ -2682,9 +2690,9 @@ class EditorApp:
             for row in toggle_rows:
                 row["refresh"]()
 
-        panel_rows["general"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"], "Common", panel_var, value="general", kind="radio", command=lambda: show_project_panel("general"), width_px=140)
-        panel_rows["lmr"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"] + cfg["menu_step_y"], "LMR", panel_var, value="lmr", kind="radio", command=lambda: show_project_panel("lmr"), width_px=140)
-        panel_rows["es"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"] + cfg["menu_step_y"] * 2, "Everlasting Summer", panel_var, value="es", kind="radio", command=lambda: show_project_panel("es"), width_px=160)
+        panel_rows["general"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"], "Common", panel_var, value="general", kind="radio", command=lambda: show_project_panel("general"), width_px=cfg["menu_item_width"], icon_side="right")
+        panel_rows["lmr"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"] + cfg["menu_step_y"], "LMR", panel_var, value="lmr", kind="radio", command=lambda: show_project_panel("lmr"), width_px=cfg["menu_item_width"], icon_side="right")
+        panel_rows["es"] = create_asset_toggle(window, cfg["menu_x"], cfg["menu_y"] + cfg["menu_step_y"] * 2, "Everlasting Summer", panel_var, value="es", kind="radio", command=lambda: show_project_panel("es"), width_px=cfg["menu_item_width"], icon_side="right")
 
         add_panel_label(general_frame, general_cfg["game_folder_label_x"], general_cfg["game_folder_label_y"], "Game Folder")
         game_folder_entry = add_panel_entry(general_frame, general_cfg["game_folder_entry_x"], general_cfg["game_folder_entry_y"], general_cfg["game_folder_entry_width"], game_path_var)
@@ -2696,8 +2704,16 @@ class EditorApp:
                 window.lift()
                 window.focus_force()
 
-        browse_game_button = tk.Button(general_frame, text="Browse", command=browse_game_folder, font=("Cascadia Mono", 8, "bold"), bg=panel_bg, fg="#56f4ee", activebackground=panel_bg, activeforeground="#ffffff", bd=1, relief="flat", highlightthickness=1, highlightbackground=panel_border)
-        browse_game_button.place(x=general_cfg["browse_x"], y=general_cfg["browse_y"], width=general_cfg["browse_width"], height=24)
+        browse_game_widget, _browse_game_item = self._create_composite_button(
+            window,
+            canvas,
+            cfg["content_x"] + general_cfg["browse_x"],
+            cfg["content_y"] + general_cfg["browse_y"],
+            "Browse",
+            general_cfg["browse_width"],
+            24,
+            browse_game_folder,
+        )
 
         add_panel_label(general_frame, general_cfg["project_id_label_x"], general_cfg["project_id_label_y"], "Project ID")
         project_id_entry = add_panel_entry(general_frame, general_cfg["project_id_entry_x"], general_cfg["project_id_entry_y"], general_cfg["project_id_entry_width"], project_id_var)
@@ -2750,8 +2766,16 @@ class EditorApp:
             window.lift()
             window.focus_force()
 
-        browse_cover_button = tk.Button(lmr_frame, text="Choose", command=browse_cover_file, font=("Cascadia Mono", 8, "bold"), bg=panel_bg, fg="#56f4ee", activebackground=panel_bg, activeforeground="#ffffff", bd=1, relief="flat", highlightthickness=1, highlightbackground=panel_border)
-        browse_cover_button.place(x=lmr_cfg["cover_button_x"], y=lmr_cfg["cover_button_y"], width=lmr_cfg["cover_button_width"], height=24)
+        browse_cover_widget, _browse_cover_item = self._create_composite_button(
+            window,
+            canvas,
+            cfg["content_x"] + lmr_cfg["cover_button_x"],
+            cfg["content_y"] + lmr_cfg["cover_button_y"],
+            "Choose",
+            lmr_cfg["cover_button_width"],
+            24,
+            browse_cover_file,
+        )
 
         add_panel_label(lmr_frame, lmr_cfg["resources_label_x"], lmr_cfg["resources_label_y"], "resources.yaml sections")
         add_panel_text(lmr_frame, lmr_cfg["resources_note_x"], lmr_cfg["resources_note_y"], "Choose base nodes for the initial resources.yaml template.", "#9aa0a0", 560)
@@ -2800,7 +2824,7 @@ class EditorApp:
             is_lmr = game_var.get() == "lmr"
             lmr_state = "normal" if is_lmr else "disabled"
             es_state = "normal" if game_var.get() == "es" else "disabled"
-            for widget in (lmr_description_widget, lmr_title_entry, lmr_version_entry, cover_entry, browse_cover_button):
+            for widget in (lmr_description_widget, lmr_title_entry, lmr_version_entry, cover_entry):
                 widget.configure(state=lmr_state)
             es_display_entry.configure(state=es_state)
             panel_rows["lmr"]["set_disabled"](not is_lmr)
