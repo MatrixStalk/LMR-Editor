@@ -2486,13 +2486,16 @@ class EditorApp:
             "---",
             "title:",
             f"    ru: {json.dumps(title, ensure_ascii=False)}",
+            "",
             "description:",
             f"    ru: {json.dumps(description, ensure_ascii=False)}",
+            "",
             f"version: {json.dumps(version, ensure_ascii=False)}",
         ]
         if cover_rel_path:
+            lines.append("")
             lines.append(f"cover: {json.dumps(cover_rel_path, ensure_ascii=False)}")
-        return "\n".join(lines[:2] + [lines[2], "", lines[3], lines[4]] + lines[5:]) + "\n"
+        return "\n".join(lines) + "\n"
 
     def _detect_project_type(self) -> str | None:
         if self.project_dir is None:
