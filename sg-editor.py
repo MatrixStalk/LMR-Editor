@@ -364,6 +364,88 @@ DEFAULT_LAYOUT = {
         "create_x": 390,
         "actions_y_lmr": 306,
         "actions_y_es": 206
+    },
+    "lmr_resource_manager_window": {
+        "width": 760,
+        "height": 520,
+        "offset_x": 160,
+        "offset_y": 110,
+        "title_x": 380,
+        "title_y": 16,
+        "content_x": 0,
+        "content_y": 0,
+        "content_width": 760,
+        "content_height": 520,
+        "preview_x": 404,
+        "preview_y": 44,
+        "preview_width": 320,
+        "preview_height": 180,
+        "drag_x": 18,
+        "drag_y": 10,
+        "drag_width": 724,
+        "drag_height": 24,
+        "close_x": 722,
+        "close_y": 10,
+        "button_width": 80,
+        "button_height": 24,
+        "button_gap": 10,
+        "footer_y": 480,
+        "cancel_x": 566,
+        "confirm_x": 656,
+        "dropdown_cap_width_ratio": 1.5,
+        "dropdown_cap_min_width": 24
+    },
+    "lmr_visual_dialog": {
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 240,
+        "asset_label_x": 20,
+        "asset_label_y": 84,
+        "asset_entry_x": 20,
+        "asset_entry_y": 106,
+        "asset_entry_width": 240,
+        "folder_label_x": 280,
+        "folder_label_y": 84,
+        "folder_entry_x": 280,
+        "folder_entry_y": 106,
+        "folder_entry_width": 100,
+        "source_type_label_x": 20,
+        "source_type_label_y": 144,
+        "source_type_x": 20,
+        "source_type_y": 166,
+        "source_type_width": 120,
+        "animated_x": 160,
+        "animated_y": 164,
+        "static_label_x": 20,
+        "static_label_y": 206,
+        "static_entry_x": 20,
+        "static_entry_y": 228,
+        "static_entry_width": 540,
+        "static_browse_x": 574,
+        "static_browse_y": 226,
+        "static_browse_width": 72,
+        "anim_label_x": 20,
+        "anim_label_y": 272,
+        "anim_entry_x": 20,
+        "anim_entry_y": 294,
+        "anim_entry_width": 540,
+        "anim_browse_x": 574,
+        "anim_browse_y": 292,
+        "anim_browse_width": 72,
+        "preview_x": 404,
+        "preview_y": 44,
+        "preview_width": 320,
+        "preview_height": 180,
+        "cancel_x": 560,
+        "cancel_y_static": 404,
+        "cancel_y_animated": 474,
+        "cancel_width": 72,
+        "add_x": 650,
+        "add_y_static": 404,
+        "add_y_animated": 474,
+        "add_width": 72
     }
 }
 
@@ -1583,13 +1665,16 @@ class EditorApp:
         draw_state(state, "idle")
         return total_width, item_ids
 
-    def _create_image_button(self, x, y, idle_name, hover_name, pressed_name, command):
-        item = self.canvas.create_image(x, y, anchor="nw", image=self.assets.get(idle_name))
-        self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, image=self.assets.get(hover_name)))
-        self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, image=self.assets.get(idle_name)))
-        self.canvas.tag_bind(item, "<ButtonPress-1>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, image=self.assets.get(pressed_name)))
-        self.canvas.tag_bind(item, "<ButtonRelease-1>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, image=self.assets.get(hover_name)))
-        self.canvas.tag_bind(item, "<Button-1>", lambda _e: command())
+    def _create_image_button(self, x, y, idle_name, hover_name, pressed_name, command, parent_window=None, parent_canvas=None):
+        canvas = parent_canvas if parent_canvas is not None else self.canvas
+        if canvas is None:
+            return None
+        item = canvas.create_image(x, y, anchor="nw", image=self.assets.get(idle_name))
+        canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: canvas.itemconfigure(item_id, image=self.assets.get(hover_name)))
+        canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: canvas.itemconfigure(item_id, image=self.assets.get(idle_name)))
+        canvas.tag_bind(item, "<ButtonPress-1>", lambda _e, item_id=item: canvas.itemconfigure(item_id, image=self.assets.get(pressed_name)))
+        canvas.tag_bind(item, "<ButtonRelease-1>", lambda _e, item_id=item: canvas.itemconfigure(item_id, image=self.assets.get(hover_name)))
+        canvas.tag_bind(item, "<Button-1>", lambda _e: command())
         return item
 
     def _create_composite_button(self, parent_window, parent_canvas, x, y, label, middle_width, button_height, action, alpha=1.0):
@@ -2480,6 +2565,28 @@ class EditorApp:
         for key, default_value in default_create_file.items():
             create_file[key] = int(create_file.get(key, default_value))
 
+        resource_window = layout.get("lmr_resource_manager_window", DEFAULT_LAYOUT["lmr_resource_manager_window"])
+        layout["lmr_resource_manager_window"] = {}
+        for key, default_value in DEFAULT_LAYOUT["lmr_resource_manager_window"].items():
+            value = resource_window.get(key, default_value)
+            if isinstance(default_value, float):
+                layout["lmr_resource_manager_window"][key] = float(value)
+            elif isinstance(default_value, int):
+                layout["lmr_resource_manager_window"][key] = int(value)
+            else:
+                layout["lmr_resource_manager_window"][key] = value
+
+        visual_dialog = layout.get("lmr_visual_dialog", DEFAULT_LAYOUT["lmr_visual_dialog"])
+        layout["lmr_visual_dialog"] = {}
+        for key, default_value in DEFAULT_LAYOUT["lmr_visual_dialog"].items():
+            value = visual_dialog.get(key, default_value)
+            if isinstance(default_value, float):
+                layout["lmr_visual_dialog"][key] = float(value)
+            elif isinstance(default_value, int):
+                layout["lmr_visual_dialog"][key] = int(value)
+            else:
+                layout["lmr_visual_dialog"][key] = value
+
         return layout
 
     def _get_layout_mtime(self):
@@ -3345,13 +3452,395 @@ class EditorApp:
         label_widget.configure(text="", image=tk_image)
         label_widget.image = tk_image
 
+    def _close_lmr_dialog(self, window):
+        try:
+            window.grab_release()
+        except tk.TclError:
+            pass
+        if window.winfo_exists():
+            window.destroy()
+        self._focus_editor_widget()
+
+    def _create_lmr_dialog_button(self, window, label: str, x: int, y: int, action, middle_width: int | None = None):
+        cfg = self.layout["lmr_resource_manager_window"]
+        canvas = getattr(window, "_dialog_canvas", None)
+        if canvas is None:
+            return None
+        width = middle_width if middle_width is not None else cfg["button_width"]
+        widget, window_item = self._create_composite_button(window, canvas, x, y, label, width, cfg["button_height"], action)
+        if widget is not None:
+            widget._lmr_button_x = x  # type: ignore[attr-defined]
+            widget._lmr_button_y = y  # type: ignore[attr-defined]
+            widget._lmr_button_width = width  # type: ignore[attr-defined]
+            widget._lmr_button_height = cfg["button_height"]  # type: ignore[attr-defined]
+            widget._lmr_button_item = window_item  # type: ignore[attr-defined]
+            buttons = getattr(window, "_lmr_dialog_buttons", None)
+            if buttons is None:
+                buttons = []
+                window._lmr_dialog_buttons = buttons  # type: ignore[attr-defined]
+            if widget not in buttons:
+                buttons.append(widget)
+        return widget, window_item
+
+    def _get_lmr_dialog_content(self, window):
+        return getattr(window, "_dialog_content", window)
+
+    def _create_lmr_text_label(self, window, text: str, x: int, y: int, bold: bool = True, color: str = "#f0f0f0"):
+        parent = self._get_lmr_dialog_content(window)
+        label = tk.Label(parent, text=text, bg="#111111", fg=color, font=("Cascadia Mono", 9, "bold" if bold else "normal"))
+        label.place(x=x, y=y)
+        return label
+
+    def _create_lmr_input_shell(self, window, x: int, y: int, width: int, height: int = 24, opened: bool = False):
+        parent = self._get_lmr_dialog_content(window)
+        shell = tk.Canvas(parent, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        shell.place(x=x, y=y, width=width, height=height)
+        shell._lmr_shell_x = x  # type: ignore[attr-defined]
+        shell._lmr_shell_y = y  # type: ignore[attr-defined]
+        shell._lmr_shell_width = width  # type: ignore[attr-defined]
+        shell._lmr_shell_height = height  # type: ignore[attr-defined]
+        state_suffix = "_opened" if opened else ""
+        left_name = f"listbox_l{state_suffix}.png"
+        right_name = f"listbox_r{state_suffix}.png"
+        cfg = self.layout["lmr_resource_manager_window"]
+        cap_ratio = float(cfg.get("dropdown_cap_width_ratio", 1.5))
+        cap_min = int(cfg.get("dropdown_cap_min_width", 24))
+        left_width = max(cap_min, int(round(height * cap_ratio)))
+        right_width = max(cap_min, int(round(height * cap_ratio)))
+        middle_width = max(1, width - left_width - right_width)
+        left = self._load_asset_exact(left_name, left_width, height)
+        middle = self._load_asset_exact(f"listbox_m{state_suffix}.png", middle_width, height)
+        right = self._load_asset_exact(right_name, right_width, height)
+        shell._shell_images = [left, middle, right]  # type: ignore[attr-defined]
+        if left is not None:
+            shell.create_image(0, 0, image=left, anchor="nw")
+        if middle is not None:
+            shell.create_image(left_width, 0, image=middle, anchor="nw")
+        if right is not None:
+            shell.create_image(width - right_width, 0, image=right, anchor="nw")
+        return shell
+
+    def _create_lmr_text_entry(self, window, variable: tk.StringVar, x: int, y: int, width: int, readonly: bool = False):
+        parent = self._get_lmr_dialog_content(window)
+        entry = tk.Entry(
+            parent,
+            textvariable=variable,
+            bd=1,
+            highlightthickness=1,
+            relief="flat",
+            bg="#0b0b0b",
+            fg="#f5f5f5",
+            readonlybackground="#0b0b0b",
+            highlightbackground="#56f4ee",
+            highlightcolor="#56f4ee",
+            insertbackground="#56f4ee",
+            font=("Cascadia Mono", 9),
+        )
+        if readonly:
+            entry.configure(state="readonly")
+        entry.place(x=x, y=y, width=width, height=24)
+        return entry, entry
+
+    def _draw_lmr_dropdown_shell(self, shell, width: int, height: int, state_name: str, text: str):
+        shell.delete("all")
+        suffix_map = {
+            "idle": "",
+            "onmouse": "_onmouse",
+            "opened": "_opened",
+            "clicked": "_clicked",
+        }
+        suffix = suffix_map.get(state_name, "")
+        left_name = f"listbox_l{suffix}.png"
+        right_name = f"listbox_r{suffix}.png"
+        cfg = self.layout["lmr_resource_manager_window"]
+        cap_ratio = float(cfg.get("dropdown_cap_width_ratio", 1.5))
+        cap_min = int(cfg.get("dropdown_cap_min_width", 24))
+        left_width = max(cap_min, int(round(height * cap_ratio)))
+        right_width = max(cap_min, int(round(height * cap_ratio)))
+        middle_width = max(1, width - left_width - right_width)
+        left = self._load_asset_exact(left_name, left_width, height)
+        middle = self._load_asset_exact(f"listbox_m{suffix}.png", middle_width, height)
+        right = self._load_asset_exact(right_name, right_width, height)
+        if left is None:
+            left = self._load_asset_exact("listbox_l.png", left_width, height)
+        if middle is None:
+            middle = self._load_asset_exact("listbox_m.png", middle_width, height)
+        if right is None:
+            right = self._load_asset_exact("listbox_r.png", right_width, height)
+        shell._dropdown_images = [left, middle, right]  # type: ignore[attr-defined]
+        if left is not None:
+            shell.create_image(0, 0, image=left, anchor="nw")
+        if middle is not None:
+            shell.create_image(left_width, 0, image=middle, anchor="nw")
+        if right is not None:
+            shell.create_image(width - right_width, 0, image=right, anchor="nw")
+        shell.create_text(10, height // 2, anchor="w", text=text, fill="#f5f5f5", font=("Cascadia Mono", 9))
+
+    def _create_lmr_asset_checkbox(self, window, variable: tk.BooleanVar, label: str, x: int, y: int):
+        parent = self._get_lmr_dialog_content(window)
+        frame = tk.Frame(parent, bg="#111111", bd=0, highlightthickness=0)
+        frame.place(x=x, y=y)
+        icon_label = tk.Label(frame, bg="#111111", bd=0, highlightthickness=0)
+        icon_label.pack(side="left")
+        text_label = tk.Label(frame, text=label, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9))
+        text_label.pack(side="left", padx=(6, 0))
+        state = {"hovered": False, "disabled": False}
+
+        def refresh():
+            checked = bool(variable.get())
+            if state["disabled"]:
+                icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
+                text_color = "#6e6e6e"
+            elif state["hovered"]:
+                icon_name = "checkbox_onmouse.png"
+                text_color = "#56f4ee"
+            else:
+                icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
+                text_color = "#f0f0f0"
+            icon = self.assets.get(icon_name)
+            icon_label.configure(image=icon)
+            icon_label.image = icon
+            text_label.configure(fg=text_color)
+
+        def toggle(_event=None):
+            if state["disabled"]:
+                return
+            variable.set(not bool(variable.get()))
+            refresh()
+
+        def on_enter(_event=None):
+            if state["disabled"]:
+                return
+            state["hovered"] = True
+            refresh()
+
+        def on_leave(_event=None):
+            state["hovered"] = False
+            refresh()
+
+        def set_disabled(value: bool):
+            state["disabled"] = bool(value)
+            state["hovered"] = False
+            refresh()
+
+        for widget in (frame, icon_label, text_label):
+            widget.bind("<Button-1>", toggle)
+            widget.bind("<Enter>", on_enter)
+            widget.bind("<Leave>", on_leave)
+        refresh()
+        return {"frame": frame, "icon": icon_label, "text": text_label, "set_disabled": set_disabled, "refresh": refresh}
+
+    def _open_lmr_dropdown_popup(self, window, shell, variable: tk.StringVar, values):
+        existing = getattr(shell, "_popup", None)
+        if existing is not None and existing.winfo_exists():
+            existing.destroy()
+            shell._popup = None  # type: ignore[attr-defined]
+            self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "idle", variable.get().strip())
+            return
+        if not values:
+            return
+        popup = tk.Toplevel(window)
+        popup.transient(window)
+        popup.overrideredirect(True)
+        popup.configure(bg="#111111")
+        try:
+            popup.wm_attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        row_height = 24
+        visible_values = list(values)
+        popup_width = max(shell.winfo_width(), 160)
+        popup_height = max(24, len(visible_values) * row_height)
+        popup.geometry(f"{popup_width}x{popup_height}+{shell.winfo_rootx()}+{shell.winfo_rooty() + shell.winfo_height() + 2}")
+        canvas = tk.Canvas(popup, width=popup_width, height=popup_height, bg="#111111", highlightthickness=0, bd=0)
+        canvas.pack()
+        bg_mid = self._load_asset_exact("listbox_list_mid.png", popup_width, popup_height)
+        if bg_mid is not None:
+            canvas._popup_images = [bg_mid]  # type: ignore[attr-defined]
+            canvas.create_image(0, 0, image=bg_mid, anchor="nw")
+        else:
+            canvas.create_rectangle(0, 0, popup_width, popup_height, fill="#161616", outline="")
+        sep_img = self._load_asset_exact("listbox_list_separator.png", popup_width, 2)
+        if sep_img is not None:
+            canvas._popup_images = getattr(canvas, "_popup_images", []) + [sep_img]  # type: ignore[attr-defined]
+
+        def close_popup():
+            if popup.winfo_exists():
+                popup.destroy()
+            shell._popup = None  # type: ignore[attr-defined]
+            self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "idle", variable.get().strip())
+
+        def choose_value(selected):
+            variable.set(selected)
+            close_popup()
+
+        for index, value in enumerate(visible_values):
+            top = index * row_height
+            row = canvas.create_rectangle(0, top, popup_width, top + row_height, outline="", fill="")
+            text = canvas.create_text(10, top + row_height // 2, anchor="w", text=value, fill="#f5f5f5", font=("Cascadia Mono", 9))
+            if sep_img is not None and index < len(visible_values) - 1:
+                canvas.create_image(0, top + row_height - 1, image=sep_img, anchor="nw")
+            def on_enter(_e, item=row):
+                canvas.itemconfigure(item, fill="#17484a")
+            def on_leave(_e, item=row):
+                canvas.itemconfigure(item, fill="")
+            def on_click(_e, selected=value):
+                choose_value(selected)
+            for item in (row, text):
+                canvas.tag_bind(item, "<Enter>", on_enter)
+                canvas.tag_bind(item, "<Leave>", on_leave)
+                canvas.tag_bind(item, "<Button-1>", on_click)
+        popup.deiconify()
+        popup.lift()
+        popup.focus_force()
+        popup.bind("<Escape>", lambda _e: close_popup())
+        shell._popup = popup  # type: ignore[attr-defined]
+        self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "opened", variable.get().strip())
+
+    def _create_lmr_combobox(self, window, variable: tk.StringVar, values, x: int, y: int, width: int):
+        shell = self._create_lmr_input_shell(window, x, y, width, 24, opened=False)
+        shell._is_lmr_dropdown_shell = True  # type: ignore[attr-defined]
+        shell._dropdown_variable = variable  # type: ignore[attr-defined]
+        shell._dropdown_values = list(values)  # type: ignore[attr-defined]
+        if not variable.get() and values:
+            variable.set(list(values)[0])
+        self._draw_lmr_dropdown_shell(shell, width, 24, "idle", variable.get().strip())
+        shell.bind("<Enter>", lambda _e: self._draw_lmr_dropdown_shell(shell, width, 24, "onmouse", variable.get().strip()) if not getattr(shell, "_popup", None) else None)
+        shell.bind("<Leave>", lambda _e: self._draw_lmr_dropdown_shell(shell, width, 24, "idle", variable.get().strip()) if not getattr(shell, "_popup", None) else None)
+        shell.bind("<Button-1>", lambda _e: self._open_lmr_dropdown_popup(window, shell, variable, list(values)))
+        variable.trace_add("write", lambda *_args: self._draw_lmr_dropdown_shell(shell, width, 24, "opened" if getattr(shell, "_popup", None) else "idle", variable.get().strip()))
+        return shell, shell
+
+    def _refresh_lmr_dialog_widgets(self, window):
+        if not window.winfo_exists():
+            return
+        canvas = getattr(window, "_dialog_canvas", None)
+        if canvas is None:
+            return
+        for child in canvas.winfo_children():
+            if getattr(child, "_is_lmr_dropdown_shell", False):
+                width = int(getattr(child, "_lmr_shell_width", child.winfo_width()))
+                height = int(getattr(child, "_lmr_shell_height", child.winfo_height()))
+                variable = getattr(child, "_dropdown_variable", None)
+                text = variable.get().strip() if variable is not None else ""
+                state = "opened" if getattr(child, "_popup", None) else "idle"
+                self._draw_lmr_dropdown_shell(child, width, height, state, text)
+        for button in getattr(window, "_lmr_dialog_buttons", []):
+            if not button.winfo_exists():
+                continue
+            item_id = getattr(button, "_lmr_button_item", None)
+            item_exists = False
+            if item_id is not None:
+                try:
+                    item_exists = bool(canvas.type(item_id))
+                except tk.TclError:
+                    item_exists = False
+            if not item_exists:
+                x = int(getattr(button, "_lmr_button_x", 0))
+                y = int(getattr(button, "_lmr_button_y", 0))
+                width = int(getattr(button, "_lmr_button_width", button.winfo_reqwidth()))
+                height = int(getattr(button, "_lmr_button_height", button.winfo_reqheight()))
+                new_item = canvas.create_window(x, y, anchor="nw", window=button, width=width, height=height)
+                button._lmr_button_item = new_item  # type: ignore[attr-defined]
+        callback = getattr(window, "_lmr_layout_refresh", None)
+        if callable(callback):
+            callback()
+
+    def _create_lmr_text_preview(self, window, x: int, y: int, width: int, height: int):
+        shell = self._create_lmr_input_shell(window, x, y, width, height, opened=False)
+        shell.delete("all")
+        shell.create_rectangle(0, 0, width, height, fill="#151515", outline="#222222")
+        return shell
+
+    def _draw_lmr_dialog_background(self, canvas, width, height):
+        canvas.create_rectangle(0, 0, width, height, fill="#111111", outline="#2a2a2a", width=1)
+
+    def _watch_lmr_dialog_layout(self, window):
+        if not window.winfo_exists():
+            return
+        current_mtime = self._get_layout_mtime()
+        last_mtime = getattr(window, "_layout_mtime", None)
+        if current_mtime != last_mtime:
+            window._layout_mtime = current_mtime
+            self.layout = self._sanitize_layout(load_json(LAYOUT_PATH, DEFAULT_LAYOUT))
+            cfg = self.layout["lmr_resource_manager_window"]
+            width = max(320, int(getattr(window, "_dialog_width", cfg["width"])))
+            height = max(240, int(getattr(window, "_dialog_height", cfg["height"])))
+            window.geometry(f"{width}x{height}+{window.winfo_x()}+{window.winfo_y()}")
+            canvas = getattr(window, "_dialog_canvas", None)
+            if canvas is not None:
+                canvas.configure(width=width, height=height)
+                canvas.delete("all")
+                self._draw_lmr_dialog_background(canvas, width, height)
+                canvas.create_text(cfg["title_x"], cfg["title_y"], text=getattr(window, "_dialog_title", "LMR Resource Manager"), anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 11, "bold"))
+                drag_zone = canvas.create_rectangle(cfg["drag_x"], cfg["drag_y"], cfg["drag_x"] + cfg["drag_width"], cfg["drag_y"] + cfg["drag_height"], outline="", fill="")
+                drag_state = {"x": 0, "y": 0}
+                def start_drag(event):
+                    drag_state["x"] = event.x_root - window.winfo_x()
+                    drag_state["y"] = event.y_root - window.winfo_y()
+                def drag_window(event):
+                    window.geometry(f"+{event.x_root - drag_state['x']}+{event.y_root - drag_state['y']}")
+                canvas.tag_bind(drag_zone, "<ButtonPress-1>", start_drag)
+                canvas.tag_bind(drag_zone, "<B1-Motion>", drag_window)
+                self._create_image_button(cfg["close_x"], cfg["close_y"], "exit_btn_idle.png", "exit_btn_onmouse.png", "exit_btn_clicked.png", lambda w=window: self._close_lmr_dialog(w), parent_window=window, parent_canvas=canvas)
+            try:
+                window.deiconify()
+                window.lift()
+                window.focus_force()
+                window.wm_attributes("-topmost", True)
+            except tk.TclError:
+                pass
+            self._refresh_lmr_dialog_widgets(window)
+        window.after(250, lambda w=window: self._watch_lmr_dialog_layout(w))
+
     def _open_lmr_basic_dialog(self, title: str, width: int = 640, height: int = 420):
+        cfg = self.layout["lmr_resource_manager_window"]
+        width = max(width, cfg["width"])
+        height = max(height, cfg["height"])
         window = tk.Toplevel(self.root)
         window.transient(self.root)
-        window.title(title)
-        window.geometry(f"{width}x{height}+{self.root.winfo_x() + 140}+{self.root.winfo_y() + 100}")
         window.configure(bg="#111111")
+        window.overrideredirect(True)
+        try:
+            window.wm_attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        window.geometry(f"{width}x{height}+{self.root.winfo_x() + cfg['offset_x']}+{self.root.winfo_y() + cfg['offset_y']}")
         window.resizable(False, False)
+
+        canvas = tk.Canvas(window, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        canvas.pack()
+        self._draw_lmr_dialog_background(canvas, width, height)
+        canvas.create_text(cfg["title_x"], cfg["title_y"], text=title, anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 11, "bold"))
+
+        drag_zone = canvas.create_rectangle(cfg["drag_x"], cfg["drag_y"], cfg["drag_x"] + cfg["drag_width"], cfg["drag_y"] + cfg["drag_height"], outline="", fill="")
+        drag_state = {"x": 0, "y": 0}
+
+        def start_drag(event):
+            drag_state["x"] = event.x_root - window.winfo_x()
+            drag_state["y"] = event.y_root - window.winfo_y()
+
+        def drag_window(event):
+            window.geometry(f"+{event.x_root - drag_state['x']}+{event.y_root - drag_state['y']}")
+
+        canvas.tag_bind(drag_zone, "<ButtonPress-1>", start_drag)
+        canvas.tag_bind(drag_zone, "<B1-Motion>", drag_window)
+
+        self._create_image_button(cfg["close_x"], cfg["close_y"], "exit_btn_idle.png", "exit_btn_onmouse.png", "exit_btn_clicked.png", lambda w=window: self._close_lmr_dialog(w), parent_window=window, parent_canvas=canvas)
+
+        window._dialog_canvas = canvas  # type: ignore[attr-defined]
+        window._dialog_content = canvas  # type: ignore[attr-defined]
+        window._dialog_title = title  # type: ignore[attr-defined]
+        window._dialog_width = width  # type: ignore[attr-defined]
+        window._dialog_height = height  # type: ignore[attr-defined]
+        window._layout_mtime = self._get_layout_mtime()  # type: ignore[attr-defined]
+        try:
+            window.deiconify()
+            window.lift()
+            window.focus_force()
+        except tk.TclError:
+            pass
+        window.after(250, lambda w=window: self._watch_lmr_dialog_layout(w))
         return window
 
     def _show_lmr_warning(self, title: str, text: str, parent):
@@ -3380,16 +3869,16 @@ class EditorApp:
             ("Source File", 20, 144),
         ]
         for text, x, y in labels:
-            tk.Label(window, text=text, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=x, y=y)
+            self._create_lmr_text_label(window, text, x, y)
         technical_var = tk.StringVar()
         asset_name_var = tk.StringVar()
         folder_var = tk.StringVar(value="sound")
         file_var = tk.StringVar()
-        tk.Entry(window, textvariable=technical_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
-        tk.Entry(window, textvariable=asset_name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=260, height=24)
-        tk.Entry(window, textvariable=folder_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=320, y=106, width=180, height=24)
-        tk.Entry(window, textvariable=file_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=166, width=480, height=24)
-        tk.Button(window, text="Browse", command=lambda: file_var.set(self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")]))).place(x=514, y=164, width=80, height=28)
+        self._create_lmr_text_entry(window, technical_var, 20, 46, 260)
+        self._create_lmr_text_entry(window, asset_name_var, 20, 106, 260)
+        self._create_lmr_text_entry(window, folder_var, 320, 106, 180)
+        self._create_lmr_text_entry(window, file_var, 20, 166, 480)
+        self._create_lmr_dialog_button(window, "Browse", 514, 164, lambda: file_var.set(self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")])), middle_width=72)
 
         def submit():
             source = Path(file_var.get().strip())
@@ -3404,8 +3893,8 @@ class EditorApp:
             self._upsert_lmr_named_entry("sound", key, [f"    {key}: {rel_path}"])
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=514, y=218, width=80, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=218, width=80, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 424, 218, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
+        self._create_lmr_dialog_button(window, "Add", 514, 218, submit, middle_width=72)
         window.grab_set()
         window.focus_force()
 
@@ -3413,15 +3902,15 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog("Add backdrop_text", width=620, height=290)
-        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text="Locale", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=320, y=24)
-        tk.Label(window, text="Text", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        self._create_lmr_text_label(window, "Technical Name", 20, 24)
+        self._create_lmr_text_label(window, "Locale", 320, 24)
+        self._create_lmr_text_label(window, "Text", 20, 84)
         technical_var = tk.StringVar()
         locale_var = tk.StringVar(value="ru")
         text_var = tk.StringVar()
-        tk.Entry(window, textvariable=technical_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
-        ttk.Combobox(window, textvariable=locale_var, values=["ru", "en", "ja", "zh"], state="readonly").place(x=320, y=46, width=120, height=24)
-        tk.Entry(window, textvariable=text_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=574, height=24)
+        self._create_lmr_text_entry(window, technical_var, 20, 46, 260)
+        self._create_lmr_combobox(window, locale_var, ["ru", "en", "ja", "zh"], 320, 46, 120)
+        self._create_lmr_text_entry(window, text_var, 20, 106, 574)
 
         def submit():
             key = self._slugify_project_id(technical_var.get().strip())
@@ -3439,8 +3928,8 @@ class EditorApp:
             self._upsert_lmr_named_entry("backdrop_text", key, entry_lines)
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=514, y=248, width=80, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=248, width=80, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 424, 248, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
+        self._create_lmr_dialog_button(window, "Add", 514, 248, submit, middle_width=72)
         window.grab_set()
         window.focus_force()
 
@@ -3448,15 +3937,15 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog("Add variable", width=620, height=280)
-        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text="Value Type", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=320, y=24)
-        tk.Label(window, text="Value", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        self._create_lmr_text_label(window, "Technical Name", 20, 24)
+        self._create_lmr_text_label(window, "Value Type", 320, 24)
+        self._create_lmr_text_label(window, "Value", 20, 84)
         technical_var = tk.StringVar()
         value_type_var = tk.StringVar(value="number")
         value_var = tk.StringVar(value="0")
-        tk.Entry(window, textvariable=technical_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
-        ttk.Combobox(window, textvariable=value_type_var, values=["number", "text", "boolean", "expression"], state="readonly").place(x=320, y=46, width=140, height=24)
-        tk.Entry(window, textvariable=value_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=574, height=24)
+        self._create_lmr_text_entry(window, technical_var, 20, 46, 260)
+        self._create_lmr_combobox(window, value_type_var, ["number", "text", "boolean", "expression"], 320, 46, 140)
+        self._create_lmr_text_entry(window, value_var, 20, 106, 574)
 
         def submit():
             key = self._slugify_project_id(technical_var.get().strip())
@@ -3473,8 +3962,8 @@ class EditorApp:
             self._upsert_lmr_named_entry("variables", key, [f"    {key}: {rendered}"])
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=514, y=238, width=80, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=238, width=80, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 424, 238, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
+        self._create_lmr_dialog_button(window, "Add", 514, 238, submit, middle_width=72)
         window.grab_set()
         window.focus_force()
 
@@ -3482,40 +3971,40 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog("Add catalogs", width=700, height=360)
-        tk.Label(window, text="Catalog Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text="Mode", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=300, y=24)
+        self._create_lmr_text_label(window, "Catalog Name", 20, 24)
+        self._create_lmr_text_label(window, "Mode", 300, 24)
         name_var = tk.StringVar(value="bundle")
         mode_var = tk.StringVar(value="single")
         path_var = tk.StringVar(value="catalogs/bundle/catalog.json")
         platform_vars = {platform: tk.StringVar() for platform in ("windows", "linux", "macos", "android", "ios")}
-        tk.Entry(window, textvariable=name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=240, height=24)
-        ttk.Combobox(window, textvariable=mode_var, values=["single", "platforms"], state="readonly").place(x=300, y=46, width=120, height=24)
-        single_label = tk.Label(window, text="Catalog Path", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
-        single_entry = tk.Entry(window, textvariable=path_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
+        self._create_lmr_text_entry(window, name_var, 20, 46, 240)
+        self._create_lmr_combobox(window, mode_var, ["single", "platforms"], 300, 46, 120)
+        parent = self._get_lmr_dialog_content(window)
+        single_label = tk.Label(parent, text="Catalog Path", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        single_entry, single_shell = self._create_lmr_text_entry(window, path_var, 20, 114, 640)
         single_label.place(x=20, y=92)
-        single_entry.place(x=20, y=114, width=640, height=24)
         platform_widgets = []
         start_y = 92
         for index, platform in enumerate(("windows", "linux", "macos", "android", "ios")):
-            label = tk.Label(window, text=platform, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
-            entry = tk.Entry(window, textvariable=platform_vars[platform], bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
-            platform_widgets.append((label, entry, start_y + index * 44))
+            label = tk.Label(parent, text=platform, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+            entry, shell = self._create_lmr_text_entry(window, platform_vars[platform], 120, start_y + index * 44 + 22, 540)
+            platform_widgets.append((label, entry, shell, start_y + index * 44))
 
         def update_form(*_args):
             is_single = mode_var.get() == "single"
             if is_single:
                 single_label.place(x=20, y=92)
-                single_entry.place(x=20, y=114, width=640, height=24)
+                single_shell.place(x=20, y=114, width=640, height=24)
             else:
                 single_label.place_forget()
-                single_entry.place_forget()
-            for label, entry, y in platform_widgets:
+                single_shell.place_forget()
+            for label, entry, shell, y in platform_widgets:
                 if is_single:
                     label.place_forget()
-                    entry.place_forget()
+                    shell.place_forget()
                 else:
                     label.place(x=20, y=y)
-                    entry.place(x=120, y=y, width=540, height=24)
+                    shell.place(x=120, y=y, width=540, height=24)
 
         mode_var.trace_add("write", update_form)
 
@@ -3545,8 +4034,8 @@ class EditorApp:
             self._upsert_lmr_named_entry("catalogs", key, entry_lines)
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=610, y=320, width=70, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=530, y=320, width=70, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 530, 320, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
+        self._create_lmr_dialog_button(window, "Add", 610, 320, submit, middle_width=62)
         update_form()
         window.grab_set()
         window.focus_force()
@@ -3561,12 +4050,12 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog(title, width=520, height=220)
-        tk.Label(window, text=label_name, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text="Color Value", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        self._create_lmr_text_label(window, label_name, 20, 24)
+        self._create_lmr_text_label(window, "Color Value", 20, 84)
         name_var = tk.StringVar()
         value_var = tk.StringVar(value="#56F4EE")
-        tk.Entry(window, textvariable=name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=240, height=24)
-        tk.Entry(window, textvariable=value_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=240, height=24)
+        self._create_lmr_text_entry(window, name_var, 20, 46, 240)
+        self._create_lmr_text_entry(window, value_var, 20, 106, 240)
 
         def submit():
             key = self._slugify_project_id(name_var.get().strip())
@@ -3580,8 +4069,8 @@ class EditorApp:
             self._upsert_lmr_named_entry(section_name, key, [f"    {key}: {json.dumps(value, ensure_ascii=False)}"])
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=424, y=176, width=70, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=344, y=176, width=70, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 344, 176, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
+        self._create_lmr_dialog_button(window, "Add", 424, 176, submit, middle_width=62)
         window.grab_set()
         window.focus_force()
 
@@ -3595,15 +4084,15 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog(title, width=680, height=300)
-        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text="RU Text", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
-        tk.Label(window, text="EN Text", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=164)
+        self._create_lmr_text_label(window, "Technical Name", 20, 24)
+        self._create_lmr_text_label(window, "RU Text", 20, 84)
+        self._create_lmr_text_label(window, "EN Text", 20, 164)
         key_var = tk.StringVar(value=default_key)
         ru_var = tk.StringVar()
         en_var = tk.StringVar()
-        tk.Entry(window, textvariable=key_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=280, height=24)
-        tk.Entry(window, textvariable=ru_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=620, height=24)
-        tk.Entry(window, textvariable=en_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=186, width=620, height=24)
+        self._create_lmr_text_entry(window, key_var, 20, 46, 280)
+        self._create_lmr_text_entry(window, ru_var, 20, 106, 620)
+        self._create_lmr_text_entry(window, en_var, 20, 186, 620)
 
         def submit():
             key = self._slugify_project_id(key_var.get().strip())
@@ -3621,8 +4110,8 @@ class EditorApp:
             self._upsert_lmr_named_entry(section_name, key, entry_lines)
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=570, y=256, width=70, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=490, y=256, width=70, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 490, 256, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
+        self._create_lmr_dialog_button(window, "Add", 570, 256, submit, middle_width=62)
         window.grab_set()
         window.focus_force()
 
@@ -3636,15 +4125,15 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog(title, width=540, height=260)
-        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text=labels[0], bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
-        tk.Label(window, text=labels[1], bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=220, y=84)
+        self._create_lmr_text_label(window, "Technical Name", 20, 24)
+        self._create_lmr_text_label(window, labels[0], 20, 84)
+        self._create_lmr_text_label(window, labels[1], 220, 84)
         key_var = tk.StringVar()
         x_var = tk.StringVar(value=defaults[0])
         y_var = tk.StringVar(value=defaults[1])
-        tk.Entry(window, textvariable=key_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
-        tk.Entry(window, textvariable=x_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=160, height=24)
-        tk.Entry(window, textvariable=y_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=220, y=106, width=160, height=24)
+        self._create_lmr_text_entry(window, key_var, 20, 46, 260)
+        self._create_lmr_text_entry(window, x_var, 20, 106, 160)
+        self._create_lmr_text_entry(window, y_var, 220, 106, 160)
 
         def submit():
             key = self._slugify_project_id(key_var.get().strip())
@@ -3658,8 +4147,8 @@ class EditorApp:
             ])
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=444, y=216, width=70, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=364, y=216, width=70, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 364, 216, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
+        self._create_lmr_dialog_button(window, "Add", 444, 216, submit, middle_width=62)
         window.grab_set()
         window.focus_force()
 
@@ -3667,18 +4156,18 @@ class EditorApp:
         if self._detect_project_type() != "lmr":
             return
         window = self._open_lmr_basic_dialog("Add transition", width=640, height=320)
-        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Label(window, text="Preset", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
-        tk.Label(window, text="Duration", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=220, y=84)
-        tk.Label(window, text="Condition", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=144)
+        self._create_lmr_text_label(window, "Technical Name", 20, 24)
+        self._create_lmr_text_label(window, "Preset", 20, 84)
+        self._create_lmr_text_label(window, "Duration", 220, 84)
+        self._create_lmr_text_label(window, "Condition", 20, 144)
         key_var = tk.StringVar()
         preset_var = tk.StringVar(value="flash")
         duration_var = tk.StringVar(value="0.2")
         condition_var = tk.StringVar()
-        tk.Entry(window, textvariable=key_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
-        ttk.Combobox(window, textvariable=preset_var, values=["flash", "dissolve", "dissolve2", "fade", "wipeleft", "wiperight"], state="readonly").place(x=20, y=106, width=160, height=24)
-        tk.Entry(window, textvariable=duration_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=220, y=106, width=120, height=24)
-        tk.Entry(window, textvariable=condition_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=166, width=600, height=24)
+        self._create_lmr_text_entry(window, key_var, 20, 46, 260)
+        self._create_lmr_combobox(window, preset_var, ["flash", "dissolve", "dissolve2", "fade", "wipeleft", "wiperight"], 20, 106, 160)
+        self._create_lmr_text_entry(window, duration_var, 220, 106, 120)
+        self._create_lmr_text_entry(window, condition_var, 20, 166, 600)
 
         def submit():
             key = self._slugify_project_id(key_var.get().strip())
@@ -3695,8 +4184,8 @@ class EditorApp:
             self._upsert_lmr_named_entry("transitions", key, entry_lines)
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=550, y=276, width=70, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=470, y=276, width=70, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 470, 276, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
+        self._create_lmr_dialog_button(window, "Add", 550, 276, submit, middle_width=62)
         window.grab_set()
         window.focus_force()
 
@@ -3708,9 +4197,9 @@ class EditorApp:
             messagebox.showwarning("entryPoint", "No scenario technical names were found in resources.yaml.", parent=self.root)
             return
         window = self._open_lmr_basic_dialog("Add entryPoint", width=480, height=180)
-        tk.Label(window, text="Scenario ID", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        self._create_lmr_text_label(window, "Scenario ID", 20, 24)
         scenario_var = tk.StringVar(value=scenario_ids[0])
-        ttk.Combobox(window, textvariable=scenario_var, values=scenario_ids, state="readonly").place(x=20, y=46, width=300, height=24)
+        self._create_lmr_combobox(window, scenario_var, scenario_ids, 20, 46, 300)
 
         def submit():
             value = scenario_var.get().strip()
@@ -3720,8 +4209,8 @@ class EditorApp:
             self._upsert_lmr_top_level_scalar("entryPoint", value)
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=384, y=136, width=80, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=294, y=136, width=80, height=28)
+        self._create_lmr_dialog_button(window, "Cancel", 294, 136, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
+        self._create_lmr_dialog_button(window, "Add", 384, 136, submit, middle_width=72)
         window.grab_set()
         window.focus_force()
 
@@ -3736,50 +4225,57 @@ class EditorApp:
         animated_var = tk.BooleanVar(value=False)
         static_var = tk.StringVar()
         anim_var = tk.StringVar()
-        preview_label = tk.Label(window, text="Preview unavailable", bg="#161616", fg="#7a8481")
-        preview_label.place(x=410, y=44, width=320, height=180)
 
-        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
-        tk.Entry(window, textvariable=tech_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=240, height=24)
-        tk.Label(window, text="Asset Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
-        tk.Entry(window, textvariable=asset_name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=240, height=24)
-        tk.Label(window, text="Folder", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=280, y=84)
-        tk.Entry(window, textvariable=folder_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=280, y=106, width=100, height=24)
-        tk.Label(window, text="Source Type", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=144)
-        ttk.Combobox(window, textvariable=mode_var, values=(["image", "prefab"] if allow_prefab else ["image"]), state="readonly").place(x=20, y=166, width=120, height=24)
+        visual_cfg = self.layout["lmr_visual_dialog"]
+        preview_shell = self._create_lmr_text_preview(window, visual_cfg["preview_x"], visual_cfg["preview_y"], visual_cfg["preview_width"], visual_cfg["preview_height"])
+        preview_label = tk.Label(preview_shell, text="Preview unavailable", bg="#151515", fg="#8d9895")
+        preview_window_item = preview_shell.create_window(visual_cfg["preview_width"] // 2, visual_cfg["preview_height"] // 2, anchor="center", window=preview_label, width=visual_cfg["preview_width"] - 16, height=visual_cfg["preview_height"] - 16)
 
-        static_label = tk.Label(window, text="Static / Main File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
-        static_label.place(x=20, y=206)
-        static_entry = tk.Entry(window, textvariable=static_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
-        static_entry.place(x=20, y=228, width=540, height=24)
-        tk.Button(window, text="Browse", command=lambda: self._choose_visual_asset_file(window, mode_var.get(), static_var, preview_label)).place(x=574, y=226, width=80, height=28)
+        technical_label = self._create_lmr_text_label(window, "Technical Name", visual_cfg["technical_label_x"], visual_cfg["technical_label_y"])
+        technical_entry, _ = self._create_lmr_text_entry(window, tech_var, visual_cfg["technical_entry_x"], visual_cfg["technical_entry_y"], visual_cfg["technical_entry_width"])
+        asset_label = self._create_lmr_text_label(window, "Asset Name", visual_cfg["asset_label_x"], visual_cfg["asset_label_y"])
+        asset_entry, _ = self._create_lmr_text_entry(window, asset_name_var, visual_cfg["asset_entry_x"], visual_cfg["asset_entry_y"], visual_cfg["asset_entry_width"])
+        folder_label = self._create_lmr_text_label(window, "Folder", visual_cfg["folder_label_x"], visual_cfg["folder_label_y"])
+        folder_entry, _ = self._create_lmr_text_entry(window, folder_var, visual_cfg["folder_entry_x"], visual_cfg["folder_entry_y"], visual_cfg["folder_entry_width"])
+        source_type_label = self._create_lmr_text_label(window, "Source Type", visual_cfg["source_type_label_x"], visual_cfg["source_type_label_y"])
+        source_type_shell, _ = self._create_lmr_combobox(window, mode_var, (["image", "prefab"] if allow_prefab else ["image"]), visual_cfg["source_type_x"], visual_cfg["source_type_y"], visual_cfg["source_type_width"])
+
+        parent = self._get_lmr_dialog_content(window)
+        static_label = tk.Label(parent, text="Static / Main File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        static_label.place(x=visual_cfg["static_label_x"], y=visual_cfg["static_label_y"])
+        static_entry, _ = self._create_lmr_text_entry(window, static_var, visual_cfg["static_entry_x"], visual_cfg["static_entry_y"], visual_cfg["static_entry_width"])
+        static_browse_widget, _ = self._create_lmr_dialog_button(window, "Browse", visual_cfg["static_browse_x"], visual_cfg["static_browse_y"], lambda: self._choose_visual_asset_file(window, mode_var.get(), static_var, preview_label), middle_width=visual_cfg["static_browse_width"])
 
         animated_check = None
         anim_widgets = []
         if allow_animation:
-            animated_check = tk.Checkbutton(window, text="Animated", variable=animated_var, bg="#111111", fg="#f0f0f0", activebackground="#111111", activeforeground="#56f4ee", selectcolor="#111111")
-            animated_check.place(x=160, y=164)
-            anim_label = tk.Label(window, text="Anim File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
-            anim_entry = tk.Entry(window, textvariable=anim_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
-            anim_button = tk.Button(window, text="Browse", command=lambda: self._choose_visual_asset_file(window, mode_var.get(), anim_var, None))
-            anim_widgets = [anim_label, anim_entry, anim_button]
-            anim_label.place(x=20, y=272)
-            anim_entry.place(x=20, y=294, width=540, height=24)
-            anim_button.place(x=574, y=292, width=80, height=28)
+            animated_check = self._create_lmr_asset_checkbox(window, animated_var, "Animated", visual_cfg["animated_x"], visual_cfg["animated_y"])
+            anim_label = tk.Label(parent, text="Anim File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+            anim_entry, anim_shell = self._create_lmr_text_entry(window, anim_var, visual_cfg["anim_entry_x"], visual_cfg["anim_entry_y"], visual_cfg["anim_entry_width"])
+            anim_button_widget, anim_button_item = self._create_lmr_dialog_button(window, "Browse", visual_cfg["anim_browse_x"], visual_cfg["anim_browse_y"], lambda: self._choose_visual_asset_file(window, mode_var.get(), anim_var, None), middle_width=visual_cfg["anim_browse_width"])
+            anim_widgets = [anim_label, anim_entry, anim_shell, anim_button_widget, anim_button_item]
+            anim_label.place(x=visual_cfg["anim_label_x"], y=visual_cfg["anim_label_y"])
 
         def update_form(*_args):
             is_prefab = mode_var.get() == "prefab"
             if is_prefab:
                 animated_var.set(False)
             if animated_check is not None:
-                animated_check.configure(state=("disabled" if is_prefab else "normal"))
+                animated_check["set_disabled"](is_prefab)
             show_anim = allow_animation and animated_var.get() and not is_prefab
-            for widget in anim_widgets:
-                widget.place_forget()
-            if show_anim and len(anim_widgets) == 3:
-                anim_widgets[0].place(x=20, y=272)
-                anim_widgets[1].place(x=20, y=294, width=540, height=24)
-                anim_widgets[2].place(x=574, y=292, width=80, height=28)
+            if len(anim_widgets) >= 5:
+                anim_widgets[0].configure(fg=("#f0f0f0" if show_anim else "#666666"))
+                anim_widgets[1].configure(state=("normal" if show_anim else "disabled"))
+                anim_widgets[3].configure(state=("normal" if show_anim else "disabled"))
+                canvas = getattr(window, "_dialog_canvas", None)
+                if canvas is not None:
+                    canvas.itemconfigure(anim_widgets[4], state=("normal" if show_anim else "hidden"))
+                if show_anim:
+                    anim_widgets[0].place(x=visual_cfg["anim_label_x"], y=visual_cfg["anim_label_y"])
+                    anim_widgets[2].place(x=visual_cfg["anim_entry_x"], y=visual_cfg["anim_entry_y"], width=visual_cfg["anim_entry_width"], height=24)
+                else:
+                    anim_widgets[0].place_forget()
+                    anim_widgets[2].place_forget()
             if is_prefab:
                 preview_label.configure(text="Prefab preview unavailable", image="")
                 preview_label.image = None
@@ -3824,8 +4320,60 @@ class EditorApp:
             self._upsert_lmr_named_entry(section_name, key, entry_lines)
             window.destroy()
 
-        tk.Button(window, text="Add", command=submit).place(x=650, y=(474 if allow_animation else 404), width=80, height=28)
-        tk.Button(window, text="Cancel", command=window.destroy).place(x=560, y=(474 if allow_animation else 404), width=80, height=28)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", visual_cfg["cancel_x"], (visual_cfg["cancel_y_animated"] if allow_animation else visual_cfg["cancel_y_static"]), lambda w=window: self._close_lmr_dialog(w), middle_width=visual_cfg["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", visual_cfg["add_x"], (visual_cfg["add_y_animated"] if allow_animation else visual_cfg["add_y_static"]), submit, middle_width=visual_cfg["add_width"])
+
+        def refresh_visual_layout():
+            cfg = self.layout["lmr_visual_dialog"]
+            technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
+            technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"], height=24)
+            asset_label.place_configure(x=cfg["asset_label_x"], y=cfg["asset_label_y"])
+            asset_entry.place_configure(x=cfg["asset_entry_x"], y=cfg["asset_entry_y"], width=cfg["asset_entry_width"], height=24)
+            folder_label.place_configure(x=cfg["folder_label_x"], y=cfg["folder_label_y"])
+            folder_entry.place_configure(x=cfg["folder_entry_x"], y=cfg["folder_entry_y"], width=cfg["folder_entry_width"], height=24)
+            source_type_label.place_configure(x=cfg["source_type_label_x"], y=cfg["source_type_label_y"])
+            source_type_shell.place_configure(x=cfg["source_type_x"], y=cfg["source_type_y"], width=cfg["source_type_width"], height=24)
+            static_label.place_configure(x=cfg["static_label_x"], y=cfg["static_label_y"])
+            static_entry.place_configure(x=cfg["static_entry_x"], y=cfg["static_entry_y"], width=cfg["static_entry_width"], height=24)
+            preview_shell.place_configure(x=cfg["preview_x"], y=cfg["preview_y"], width=cfg["preview_width"], height=cfg["preview_height"])
+            preview_shell.configure(width=cfg["preview_width"], height=cfg["preview_height"])
+            preview_shell.delete("all")
+            preview_shell.create_rectangle(0, 0, cfg["preview_width"], cfg["preview_height"], fill="#151515", outline="#222222")
+            preview_shell.create_window(cfg["preview_width"] // 2, cfg["preview_height"] // 2, anchor="center", window=preview_label, width=cfg["preview_width"] - 16, height=cfg["preview_height"] - 16)
+            if animated_check is not None:
+                animated_check["frame"].place_configure(x=cfg["animated_x"], y=cfg["animated_y"])
+            if allow_animation and len(anim_widgets) >= 5:
+                anim_widgets[0].place_configure(x=cfg["anim_label_x"], y=cfg["anim_label_y"])
+                anim_widgets[1].place_configure(x=cfg["anim_entry_x"], y=cfg["anim_entry_y"], width=cfg["anim_entry_width"], height=24)
+                anim_widgets[2].place_configure(x=cfg["anim_entry_x"], y=cfg["anim_entry_y"], width=cfg["anim_entry_width"], height=24)
+                anim_button_widget._lmr_button_x = cfg["anim_browse_x"]  # type: ignore[attr-defined]
+                anim_button_widget._lmr_button_y = cfg["anim_browse_y"]  # type: ignore[attr-defined]
+                anim_button_widget._lmr_button_width = cfg["anim_browse_width"]  # type: ignore[attr-defined]
+                anim_button_item_current = getattr(anim_button_widget, "_lmr_button_item", None)
+                if anim_button_item_current is not None:
+                    canvas = getattr(window, "_dialog_canvas", None)
+                    if canvas is not None:
+                        canvas.coords(anim_button_item_current, cfg["anim_browse_x"], cfg["anim_browse_y"])
+                        canvas.itemconfigure(anim_button_item_current, width=cfg["anim_browse_width"], height=self.layout["lmr_resource_manager_window"]["button_height"])
+            static_browse_widget._lmr_button_x = cfg["static_browse_x"]  # type: ignore[attr-defined]
+            static_browse_widget._lmr_button_y = cfg["static_browse_y"]  # type: ignore[attr-defined]
+            static_browse_widget._lmr_button_width = cfg["static_browse_width"]  # type: ignore[attr-defined]
+            cancel_button._lmr_button_x = cfg["cancel_x"]  # type: ignore[attr-defined]
+            cancel_button._lmr_button_y = (cfg["cancel_y_animated"] if allow_animation else cfg["cancel_y_static"])  # type: ignore[attr-defined]
+            cancel_button._lmr_button_width = cfg["cancel_width"]  # type: ignore[attr-defined]
+            add_button._lmr_button_x = cfg["add_x"]  # type: ignore[attr-defined]
+            add_button._lmr_button_y = (cfg["add_y_animated"] if allow_animation else cfg["add_y_static"])  # type: ignore[attr-defined]
+            add_button._lmr_button_width = cfg["add_width"]  # type: ignore[attr-defined]
+            canvas = getattr(window, "_dialog_canvas", None)
+            for button in (static_browse_widget, cancel_button, add_button):
+                item = getattr(button, "_lmr_button_item", None)
+                if canvas is not None and item is not None:
+                    canvas.coords(item, button._lmr_button_x, button._lmr_button_y)
+                    canvas.itemconfigure(item, width=button._lmr_button_width, height=self.layout["lmr_resource_manager_window"]["button_height"])
+            update_form()
+
+        window._lmr_layout_refresh = refresh_visual_layout  # type: ignore[attr-defined]
+        refresh_visual_layout()
         update_form()
         window.grab_set()
         window.focus_force()
