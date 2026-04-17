@@ -137,7 +137,7 @@ def generate_build_number() -> str:
 DEFAULT_LAYOUT = {
     "window": {"width": 1919, "height": 1079, "drag_top_height": 52},
     "drag_area": {"x": 94, "y": 22, "width": 1720, "height": 92},
-    "menu": {"project_x": 148, "file_x": 203, "settings_x": 239, "y": 31},
+    "menu": {"project_x": 148, "file_x": 203, "settings_x": 239, "resource_manager_x": 298, "y": 31},
     "logos": {"main_x": 878, "main_y": 29, "side_x": 108, "side_y": 81},
     "file_tabs": {
         "x": 180,
@@ -760,6 +760,8 @@ class EditorApp:
         self._create_text_button(menu["project_x"], menu["y"], "Project", self.open_project)
         self._create_text_button(menu["file_x"], menu["y"], "File", self.save_current_file)
         self._create_text_button(menu["settings_x"], menu["y"], "Settings", self.open_settings_window)
+        if self._detect_project_type() == "lmr":
+            self._create_text_button(menu["resource_manager_x"], menu["y"], "LMR Resource Manager", self.add_lmr_backdrop_bg)
 
         logos = self.layout["logos"]
         if "me_logo.png" in self.assets:
@@ -907,6 +909,9 @@ class EditorApp:
         project_menu.add_command(label="Create Project", command=self.create_mod_project)
         project_menu.add_command(label="Create Project File", command=self.create_project_text_file)
         project_menu.add_command(label="LMR Bundle Extractor", command=self.open_lmr_bundle_extractor)
+        if self._detect_project_type() == "lmr":
+            project_menu.add_separator()
+            project_menu.add_cascade(label="LMR Resource Manager", menu=self._build_lmr_resource_manager_menu(project_menu))
         project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
@@ -915,6 +920,9 @@ class EditorApp:
         file_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         file_menu.add_command(label="Save", command=self.save_current_file)
         file_menu.add_command(label="Export ZIP", command=self.export_zip)
+        if self._detect_project_type() == "lmr":
+            file_menu.add_separator()
+            file_menu.add_cascade(label="LMR Resource Manager", menu=self._build_lmr_resource_manager_menu(file_menu))
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
@@ -926,6 +934,17 @@ class EditorApp:
         editor_menu.add_separator()
         editor_menu.add_command(label="Select All", command=self._select_all_text)
         self.editor_context_menu = editor_menu
+
+    def _build_lmr_resource_manager_menu(self, parent_menu):
+        menu = tk.Menu(parent_menu, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        menu.add_command(label="Add backdrop_bg", command=self.add_lmr_backdrop_bg)
+        menu.add_command(label="Add backdrop_text", command=self.add_lmr_backdrop_text)
+        menu.add_command(label="Add bg", command=self.add_lmr_bg)
+        menu.add_command(label="Add cg", command=self.add_lmr_cg)
+        menu.add_command(label="Add sound", command=self.add_lmr_sound)
+        menu.add_command(label="Add entryPoint", command=self.add_lmr_entry_point)
+        menu.add_command(label="Add variable", command=self.add_lmr_variable)
+        return menu
 
     def _create_text_button(self, x, y, text, command):
         item = self.canvas.create_text(x, y, anchor="nw", text=text, fill="#d3d7d5", font=("Segoe UI", 9), tags=(f"button_{text}",))
@@ -2262,7 +2281,7 @@ class EditorApp:
         layout["status"]["cursor_x"] = max(0, min(int(layout["status"].get("cursor_x", DEFAULT_LAYOUT["status"]["cursor_x"])), width - 20))
         layout["status"]["cursor_y"] = max(0, min(int(layout["status"].get("cursor_y", DEFAULT_LAYOUT["status"]["cursor_y"])), height - 20))
 
-        for name in ("project_x", "file_x", "settings_x"):
+        for name in ("project_x", "file_x", "settings_x", "resource_manager_x"):
             layout["menu"][name] = max(0, min(int(layout["menu"].get(name, DEFAULT_LAYOUT["menu"][name])), width - 20))
         layout["menu"]["y"] = max(0, min(int(layout["menu"].get("y", DEFAULT_LAYOUT["menu"]["y"])), height - 20))
 
@@ -3017,6 +3036,441 @@ class EditorApp:
         worker = threading.Thread(target=self._extract_lmr_bundles_worker, args=(game_dir, output_dir, result_queue), daemon=True)
         worker.start()
         progress_window.after(120, lambda: self._poll_lmr_bundle_extractor(progress_window, status_var, result_queue))
+
+    def _get_lmr_resources_path(self) -> Path | None:
+        if self._detect_project_type() != "lmr" or self.project_dir is None:
+            return None
+        return self.project_dir / "resources.yaml"
+
+    def _read_lmr_resources_content(self) -> str:
+        resources_path = self._get_lmr_resources_path()
+        if resources_path is None:
+            raise RuntimeError("LMR project is not open.")
+        if resources_path.exists():
+            return resources_path.read_text(encoding="utf-8")
+        return "---\n"
+
+    def _write_lmr_resources_content(self, content: str):
+        resources_path = self._get_lmr_resources_path()
+        if resources_path is None:
+            raise RuntimeError("LMR project is not open.")
+        resources_path.write_text(content.rstrip() + "\n", encoding="utf-8")
+        updated = resources_path.read_text(encoding="utf-8")
+        self.saved_file_snapshots[resources_path] = updated
+        self.file_buffers[resources_path] = updated
+        self.dirty_files.discard(resources_path)
+        if self.current_file == resources_path and self.editor_text is not None:
+            current_index = self.editor_text.index("insert")
+            self._set_editor_content(updated)
+            try:
+                self.editor_text.mark_set("insert", current_index)
+                self.editor_text.see(current_index)
+            except tk.TclError:
+                pass
+            self._refresh_line_numbers(force=True)
+            self._update_status(refresh_lines=False)
+            self._request_render_file_tabs()
+        self._reload_project_files()
+
+    def _find_top_level_block_range(self, lines: list[str], block_name: str):
+        header = f"{block_name}:"
+        start = None
+        for index, line in enumerate(lines):
+            if line.strip() == header:
+                start = index
+                break
+        if start is None:
+            return None, None
+        end = len(lines)
+        for index in range(start + 1, len(lines)):
+            line = lines[index]
+            if line and not line.startswith(" "):
+                end = index
+                break
+        return start, end
+
+    def _upsert_lmr_named_entry(self, block_name: str, key: str, entry_lines: list[str]):
+        content = self._read_lmr_resources_content()
+        lines = content.splitlines()
+        start, end = self._find_top_level_block_range(lines, block_name)
+        if start is None:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.append(f"{block_name}:")
+            start = len(lines) - 1
+            end = len(lines)
+
+        entry_start = None
+        entry_end = None
+        prefix = f"    {key}:"
+        for index in range(start + 1, end):
+            if lines[index].startswith(prefix):
+                entry_start = index
+                entry_end = end
+                for inner in range(index + 1, end):
+                    if lines[inner].startswith("    ") and not lines[inner].startswith("        "):
+                        entry_end = inner
+                        break
+                break
+
+        if entry_start is not None and entry_end is not None:
+            lines[entry_start:entry_end] = entry_lines
+        else:
+            insert_at = end
+            while insert_at > start + 1 and lines[insert_at - 1] == "":
+                insert_at -= 1
+            if insert_at > start + 1 and lines[insert_at - 1].strip():
+                lines.insert(insert_at, "")
+                insert_at += 1
+            lines[insert_at:insert_at] = entry_lines
+
+        self._write_lmr_resources_content("\n".join(lines))
+
+    def _upsert_lmr_top_level_scalar(self, key: str, value_line: str):
+        content = self._read_lmr_resources_content()
+        lines = content.splitlines()
+        replaced = False
+        for index, line in enumerate(lines):
+            if line.startswith(f"{key}:"):
+                lines[index] = f"{key}: {value_line}"
+                replaced = True
+                break
+        if not replaced:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.append(f"{key}: {value_line}")
+        self._write_lmr_resources_content("\n".join(lines))
+
+    def _get_lmr_scenario_ids(self) -> list[str]:
+        try:
+            content = self._read_lmr_resources_content()
+        except Exception:
+            return []
+        lines = content.splitlines()
+        start, end = self._find_top_level_block_range(lines, "scenarios")
+        if start is None:
+            return []
+        ids = []
+        for index in range(start + 1, end):
+            line = lines[index]
+            if line.startswith("    "):
+                stripped = line.strip()
+                if ":" in stripped:
+                    ids.append(stripped.split(":", 1)[0].strip())
+        return ids
+
+    def _normalize_lmr_folder(self, value: str) -> str:
+        cleaned = value.strip().replace("\\", "/").strip("/")
+        cleaned = re.sub(r"[^A-Za-z0-9_./-]+", "_", cleaned)
+        return cleaned
+
+    def _copy_lmr_asset_into_project(self, source_path: Path, folder: str, rename_to: str | None = None):
+        if self.project_dir is None:
+            raise RuntimeError("Project is not open.")
+        normalized_folder = self._normalize_lmr_folder(folder)
+        target_dir = self.project_dir / normalized_folder if normalized_folder else self.project_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        stem = rename_to.strip() if rename_to else source_path.stem
+        stem = re.sub(r"[^A-Za-z0-9_./-]+", "_", stem).strip("._")
+        if not stem:
+            stem = source_path.stem
+        target_name = f"{stem}{source_path.suffix.lower()}"
+        target_path = target_dir / target_name
+        if target_path.resolve() != source_path.resolve():
+            shutil.copy2(source_path, target_path)
+        rel_path = target_path.relative_to(self.project_dir).as_posix()
+        return rel_path, target_path
+
+    def _update_preview_label_from_path(self, label_widget: tk.Label, image_path: str):
+        if Image is None or ImageTk is None:
+            label_widget.configure(text="Preview unavailable", image="")
+            return
+        if not image_path or not Path(image_path).exists():
+            label_widget.configure(text="Preview unavailable", image="")
+            label_widget.image = None
+            return
+        try:
+            preview = Image.open(image_path)
+            preview.thumbnail((320, 180), Image.Resampling.LANCZOS)
+            tk_image = ImageTk.PhotoImage(preview)
+        except Exception:
+            label_widget.configure(text="Preview unavailable", image="")
+            label_widget.image = None
+            return
+        label_widget.configure(text="", image=tk_image)
+        label_widget.image = tk_image
+
+    def _open_lmr_basic_dialog(self, title: str, width: int = 640, height: int = 420):
+        window = tk.Toplevel(self.root)
+        window.transient(self.root)
+        window.title(title)
+        window.geometry(f"{width}x{height}+{self.root.winfo_x() + 140}+{self.root.winfo_y() + 100}")
+        window.configure(bg="#111111")
+        window.resizable(False, False)
+        return window
+
+    def _show_lmr_warning(self, title: str, text: str, parent):
+        messagebox.showwarning(title, text, parent=parent)
+
+    def _ask_open_file(self, parent, title: str, filetypes):
+        return filedialog.askopenfilename(parent=parent, title=title, filetypes=filetypes)
+
+    def add_lmr_backdrop_bg(self):
+        self._open_lmr_visual_resource_dialog(section_name="backdrop_bg", title="Add backdrop_bg", allow_animation=False, allow_prefab=True)
+
+    def add_lmr_bg(self):
+        self._open_lmr_visual_resource_dialog(section_name="bg", title="Add bg", allow_animation=True, allow_prefab=True)
+
+    def add_lmr_cg(self):
+        self._open_lmr_visual_resource_dialog(section_name="cg", title="Add cg", allow_animation=True, allow_prefab=True)
+
+    def add_lmr_sound(self):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog("Add sound", width=620, height=260)
+        labels = [
+            ("Technical Name", 20, 24),
+            ("Asset Name", 20, 84),
+            ("Folder", 320, 84),
+            ("Source File", 20, 144),
+        ]
+        for text, x, y in labels:
+            tk.Label(window, text=text, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=x, y=y)
+        technical_var = tk.StringVar()
+        asset_name_var = tk.StringVar()
+        folder_var = tk.StringVar(value="sound")
+        file_var = tk.StringVar()
+        tk.Entry(window, textvariable=technical_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
+        tk.Entry(window, textvariable=asset_name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=260, height=24)
+        tk.Entry(window, textvariable=folder_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=320, y=106, width=180, height=24)
+        tk.Entry(window, textvariable=file_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=166, width=480, height=24)
+        tk.Button(window, text="Browse", command=lambda: file_var.set(self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")]))).place(x=514, y=164, width=80, height=28)
+
+        def submit():
+            source = Path(file_var.get().strip())
+            key = self._slugify_project_id(technical_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            if not source.exists():
+                self._show_lmr_warning("Missing File", "Select a valid sound file.", window)
+                return
+            rel_path, _ = self._copy_lmr_asset_into_project(source, folder_var.get(), asset_name_var.get().strip() or None)
+            self._upsert_lmr_named_entry("sound", key, [f"    {key}: {rel_path}"])
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=514, y=218, width=80, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=218, width=80, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_backdrop_text(self):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog("Add backdrop_text", width=620, height=290)
+        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text="Locale", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=320, y=24)
+        tk.Label(window, text="Text", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        technical_var = tk.StringVar()
+        locale_var = tk.StringVar(value="ru")
+        text_var = tk.StringVar()
+        tk.Entry(window, textvariable=technical_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
+        ttk.Combobox(window, textvariable=locale_var, values=["ru", "en", "ja", "zh"], state="readonly").place(x=320, y=46, width=120, height=24)
+        tk.Entry(window, textvariable=text_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=574, height=24)
+
+        def submit():
+            key = self._slugify_project_id(technical_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            value = text_var.get().strip()
+            if not value:
+                self._show_lmr_warning("Missing Text", "Enter text for backdrop_text.", window)
+                return
+            entry_lines = [
+                f"    {key}:",
+                f"        {locale_var.get().strip()}: {json.dumps(value, ensure_ascii=False)}",
+            ]
+            self._upsert_lmr_named_entry("backdrop_text", key, entry_lines)
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=514, y=248, width=80, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=248, width=80, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_variable(self):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog("Add variable", width=620, height=280)
+        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Label(window, text="Value Type", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=320, y=24)
+        tk.Label(window, text="Value", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        technical_var = tk.StringVar()
+        value_type_var = tk.StringVar(value="number")
+        value_var = tk.StringVar(value="0")
+        tk.Entry(window, textvariable=technical_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=260, height=24)
+        ttk.Combobox(window, textvariable=value_type_var, values=["number", "text", "boolean", "expression"], state="readonly").place(x=320, y=46, width=140, height=24)
+        tk.Entry(window, textvariable=value_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=574, height=24)
+
+        def submit():
+            key = self._slugify_project_id(technical_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            raw_value = value_var.get().strip()
+            if value_type_var.get() == "text":
+                rendered = json.dumps(raw_value, ensure_ascii=False)
+            elif value_type_var.get() == "boolean":
+                rendered = "true" if raw_value.lower() in {"1", "true", "yes", "on"} else "false"
+            else:
+                rendered = raw_value or "0"
+            self._upsert_lmr_named_entry("variables", key, [f"    {key}: {rendered}"])
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=514, y=238, width=80, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=424, y=238, width=80, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def add_lmr_entry_point(self):
+        if self._detect_project_type() != "lmr":
+            return
+        scenario_ids = self._get_lmr_scenario_ids()
+        if not scenario_ids:
+            messagebox.showwarning("entryPoint", "No scenario technical names were found in resources.yaml.", parent=self.root)
+            return
+        window = self._open_lmr_basic_dialog("Add entryPoint", width=480, height=180)
+        tk.Label(window, text="Scenario ID", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        scenario_var = tk.StringVar(value=scenario_ids[0])
+        ttk.Combobox(window, textvariable=scenario_var, values=scenario_ids, state="readonly").place(x=20, y=46, width=300, height=24)
+
+        def submit():
+            value = scenario_var.get().strip()
+            if not value:
+                self._show_lmr_warning("Missing Scenario", "Choose a scenario ID.", window)
+                return
+            self._upsert_lmr_top_level_scalar("entryPoint", value)
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=384, y=136, width=80, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=294, y=136, width=80, height=28)
+        window.grab_set()
+        window.focus_force()
+
+    def _open_lmr_visual_resource_dialog(self, section_name: str, title: str, allow_animation: bool, allow_prefab: bool):
+        if self._detect_project_type() != "lmr":
+            return
+        window = self._open_lmr_basic_dialog(title, width=760, height=520 if allow_animation else 450)
+        tech_var = tk.StringVar()
+        asset_name_var = tk.StringVar()
+        folder_var = tk.StringVar(value=section_name)
+        mode_var = tk.StringVar(value="image")
+        animated_var = tk.BooleanVar(value=False)
+        static_var = tk.StringVar()
+        anim_var = tk.StringVar()
+        preview_label = tk.Label(window, text="Preview unavailable", bg="#161616", fg="#7a8481")
+        preview_label.place(x=410, y=44, width=320, height=180)
+
+        tk.Label(window, text="Technical Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=24)
+        tk.Entry(window, textvariable=tech_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=46, width=240, height=24)
+        tk.Label(window, text="Asset Name", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=84)
+        tk.Entry(window, textvariable=asset_name_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=20, y=106, width=240, height=24)
+        tk.Label(window, text="Folder", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=280, y=84)
+        tk.Entry(window, textvariable=folder_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee").place(x=280, y=106, width=100, height=24)
+        tk.Label(window, text="Source Type", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold")).place(x=20, y=144)
+        ttk.Combobox(window, textvariable=mode_var, values=(["image", "prefab"] if allow_prefab else ["image"]), state="readonly").place(x=20, y=166, width=120, height=24)
+
+        static_label = tk.Label(window, text="Static / Main File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        static_label.place(x=20, y=206)
+        static_entry = tk.Entry(window, textvariable=static_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
+        static_entry.place(x=20, y=228, width=540, height=24)
+        tk.Button(window, text="Browse", command=lambda: self._choose_visual_asset_file(window, mode_var.get(), static_var, preview_label)).place(x=574, y=226, width=80, height=28)
+
+        animated_check = None
+        anim_widgets = []
+        if allow_animation:
+            animated_check = tk.Checkbutton(window, text="Animated", variable=animated_var, bg="#111111", fg="#f0f0f0", activebackground="#111111", activeforeground="#56f4ee", selectcolor="#111111")
+            animated_check.place(x=160, y=164)
+            anim_label = tk.Label(window, text="Anim File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+            anim_entry = tk.Entry(window, textvariable=anim_var, bg="#1a1a1a", fg="#f0f0f0", insertbackground="#56f4ee")
+            anim_button = tk.Button(window, text="Browse", command=lambda: self._choose_visual_asset_file(window, mode_var.get(), anim_var, None))
+            anim_widgets = [anim_label, anim_entry, anim_button]
+            anim_label.place(x=20, y=272)
+            anim_entry.place(x=20, y=294, width=540, height=24)
+            anim_button.place(x=574, y=292, width=80, height=28)
+
+        def update_form(*_args):
+            is_prefab = mode_var.get() == "prefab"
+            if is_prefab:
+                animated_var.set(False)
+            if animated_check is not None:
+                animated_check.configure(state=("disabled" if is_prefab else "normal"))
+            show_anim = allow_animation and animated_var.get() and not is_prefab
+            for widget in anim_widgets:
+                widget.place_forget()
+            if show_anim and len(anim_widgets) == 3:
+                anim_widgets[0].place(x=20, y=272)
+                anim_widgets[1].place(x=20, y=294, width=540, height=24)
+                anim_widgets[2].place(x=574, y=292, width=80, height=28)
+            if is_prefab:
+                preview_label.configure(text="Prefab preview unavailable", image="")
+                preview_label.image = None
+            else:
+                self._update_preview_label_from_path(preview_label, static_var.get().strip())
+
+        if allow_animation:
+            animated_var.trace_add("write", update_form)
+        mode_var.trace_add("write", update_form)
+        static_var.trace_add("write", update_form)
+
+        def submit():
+            key = self._slugify_project_id(tech_var.get().strip())
+            if not key:
+                self._show_lmr_warning("Invalid Name", "Enter a valid technical name.", window)
+                return
+            static_source = Path(static_var.get().strip()) if static_var.get().strip() else None
+            if static_source is None or not static_source.exists():
+                self._show_lmr_warning("Missing File", "Choose the main asset file.", window)
+                return
+            if mode_var.get() == "prefab":
+                rel_path, _ = self._copy_lmr_asset_into_project(static_source, folder_var.get(), asset_name_var.get().strip() or None)
+                entry_lines = [
+                    f"    {key}:",
+                    f"        static: ~@bundle[prefab]://{rel_path}",
+                ] if allow_animation else [f"    {key}: ~@bundle[prefab]://{rel_path}"]
+            else:
+                static_rel, _ = self._copy_lmr_asset_into_project(static_source, folder_var.get(), asset_name_var.get().strip() or None)
+                if allow_animation and animated_var.get():
+                    anim_source = Path(anim_var.get().strip()) if anim_var.get().strip() else None
+                    if anim_source is None or not anim_source.exists():
+                        self._show_lmr_warning("Missing File", "Choose the animation asset file.", window)
+                        return
+                    anim_rel, _ = self._copy_lmr_asset_into_project(anim_source, folder_var.get(), f"{(asset_name_var.get().strip() or static_source.stem)}_anim")
+                    entry_lines = [
+                        f"    {key}:",
+                        f"        static: {static_rel}",
+                        f"        anim: {anim_rel}",
+                    ]
+                else:
+                    entry_lines = [f"    {key}: {static_rel}"]
+            self._upsert_lmr_named_entry(section_name, key, entry_lines)
+            window.destroy()
+
+        tk.Button(window, text="Add", command=submit).place(x=650, y=(474 if allow_animation else 404), width=80, height=28)
+        tk.Button(window, text="Cancel", command=window.destroy).place(x=560, y=(474 if allow_animation else 404), width=80, height=28)
+        update_form()
+        window.grab_set()
+        window.focus_force()
+
+    def _choose_visual_asset_file(self, parent, mode: str, variable: tk.StringVar, preview_label):
+        filetypes = [("Prefab", "*.prefab"), ("All files", "*.*")] if mode == "prefab" else [("Images", "*.png *.jpg *.jpeg *.webp"), ("All files", "*.*")]
+        chosen = self._ask_open_file(parent, "Select asset file", filetypes)
+        if not chosen:
+            return
+        variable.set(chosen)
+        if preview_label is not None and mode != "prefab":
+            self._update_preview_label_from_path(preview_label, chosen)
 
     def _detect_project_type(self) -> str | None:
         if self.project_dir is None:
