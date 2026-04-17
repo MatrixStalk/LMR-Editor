@@ -1,12 +1,17 @@
 ﻿import json
 import os
+import queue
 import re
 import shutil
 import struct
+import threading
 import time
 import tkinter as tk
 import webbrowser
 import sys
+import tempfile
+import ctypes
+import winsound
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
@@ -15,6 +20,11 @@ try:
 except ImportError:
     Image = None
     ImageTk = None
+
+try:
+    import UnityPy
+except ImportError:
+    UnityPy = None
 
 try:
     from pypresence import Presence
@@ -27,6 +37,11 @@ ASSETS_DIR = BASE_DIR / "assets"
 DISCORD_RPC_PATH = BASE_DIR / "discordrpc"
 LAYOUT_PATH = BASE_DIR / "editor_layout.json"
 APP_SETTINGS_PATH = BASE_DIR / "app_settings.json"
+LMR_GAME_DATA_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Love, Money, Rock-n-Roll\Love, Money, Rock'n'Roll_Data")
+LMR_RESOURCES_ASSETS_PATH = LMR_GAME_DATA_DIR / "resources.assets"
+LMR_RESOURCES_RESS_PATH = LMR_GAME_DATA_DIR / "resources.assets.resS"
+LMR_BUNDLES_DIR = LMR_GAME_DATA_DIR / "StreamingAssets" / "aa" / "StandaloneWindows64"
+LMR_FALLBACK_UNITY_VERSION = "6000.0.59f2"
 
 BACKGROUND_IMAGE_PATH = ASSETS_DIR / "mb_bg.png"
 TRANSPARENT_COLOR = "#010203"
@@ -479,6 +494,18 @@ class EditorApp:
         self.tree_item_paths: dict[str, Path] = {}
         self.settings_window = None
         self.confirm_window = None
+        self.asset_viewer_window = None
+        self.asset_viewer_tree = None
+        self.asset_viewer_entries = []
+        self.asset_viewer_filtered_entries = []
+        self.asset_viewer_bundle_paths = []
+        self.asset_viewer_bundle_var = None
+        self.asset_viewer_search_var = None
+        self.asset_viewer_type_var = None
+        self.asset_viewer_preview_label = None
+        self.asset_viewer_preview_image = None
+        self.asset_viewer_audio_info_var = None
+        self.asset_viewer_audio_temp_path = None
         self.settings_canvas = None
         self.settings_vars: dict[str, tk.BooleanVar] = {}
         self.settings_drag_offset_x = 0
@@ -879,6 +906,7 @@ class EditorApp:
         project_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         project_menu.add_command(label="Create Project", command=self.create_mod_project)
         project_menu.add_command(label="Create Project File", command=self.create_project_text_file)
+        project_menu.add_command(label="LMR Bundle Extractor", command=self.open_lmr_bundle_extractor)
         project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
@@ -2497,6 +2525,499 @@ class EditorApp:
             lines.append(f"cover: {json.dumps(cover_rel_path, ensure_ascii=False)}")
         return "\n".join(lines) + "\n"
 
+    def _stop_asset_audio(self):
+        try:
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except RuntimeError:
+            pass
+        try:
+            ctypes.windll.winmm.mciSendStringW("close sgm_asset_audio", None, 0, None)
+        except Exception:
+            pass
+        if self.asset_viewer_audio_temp_path:
+            try:
+                Path(self.asset_viewer_audio_temp_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        self.asset_viewer_audio_temp_path = None
+
+    def _extract_asset_preview_image(self, data):
+        if Image is None or ImageTk is None:
+            return None
+        pil_image = None
+        try:
+            if hasattr(data, "image"):
+                pil_image = data.image
+        except Exception:
+            pil_image = None
+        if pil_image is None:
+            return None
+        if not isinstance(pil_image, Image.Image):
+            return None
+        preview = pil_image.copy()
+        preview.thumbnail((440, 300), Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(preview)
+
+    def _extract_asset_audio_sample(self, data):
+        samples = getattr(data, "samples", None)
+        if not samples:
+            return None
+        try:
+            sample_name, sample_bytes = next(iter(samples.items()))
+        except Exception:
+            return None
+        return sample_name, sample_bytes
+
+    def _get_lmr_unity_fallback_version(self) -> str:
+        fallback_version = LMR_FALLBACK_UNITY_VERSION
+        if UnityPy is None or not LMR_RESOURCES_ASSETS_PATH.exists():
+            return fallback_version
+        try:
+            env = UnityPy.load(str(LMR_RESOURCES_ASSETS_PATH))
+            for asset_file in env.files.values():
+                unity_version = str(getattr(asset_file, "unity_version", "") or "").strip()
+                if unity_version:
+                    return unity_version
+        except Exception:
+            pass
+        return fallback_version
+
+    def _get_lmr_bundle_paths(self):
+        if UnityPy is None:
+            raise RuntimeError("UnityPy is not installed.")
+        if not LMR_BUNDLES_DIR.exists():
+            raise FileNotFoundError("LMR bundle directory was not found.")
+        bundle_paths = sorted(LMR_BUNDLES_DIR.glob("*.bundle"))
+        if not bundle_paths:
+            raise FileNotFoundError("No LMR bundle files were found.")
+        return bundle_paths
+
+    def _load_lmr_asset_entries(self):
+        if UnityPy is None:
+            raise RuntimeError("UnityPy is not installed.")
+        bundle_paths = self._get_lmr_bundle_paths()
+        if hasattr(UnityPy, "config"):
+            try:
+                UnityPy.config.FALLBACK_UNITY_VERSION = self._get_lmr_unity_fallback_version()
+            except Exception:
+                pass
+        allowed_types = {"Texture2D", "Sprite", "AudioClip"}
+        entries = []
+        for bundle_path in bundle_paths:
+            try:
+                env = UnityPy.load(str(bundle_path))
+            except Exception:
+                continue
+            for index, obj in enumerate(env.objects):
+                try:
+                    data = obj.read()
+                except Exception:
+                    continue
+
+                asset_type = str(getattr(obj.type, "name", obj.type))
+                if asset_type not in allowed_types:
+                    continue
+
+                raw_name = (getattr(data, "m_Name", "") or getattr(data, "name", "") or "").strip()
+                image_preview = self._extract_asset_preview_image(data) if asset_type in {"Texture2D", "Sprite"} else None
+                audio_sample = self._extract_asset_audio_sample(data) if asset_type == "AudioClip" else None
+
+                if image_preview is None and audio_sample is None and not raw_name:
+                    continue
+
+                technical_name = raw_name or f"{bundle_path.stem}:{asset_type.lower()}_{index}"
+                entries.append(
+                    {
+                        "technical_name": technical_name,
+                        "file_name": bundle_path.name,
+                        "type": asset_type,
+                        "object_id": obj.path_id,
+                        "preview_image": image_preview,
+                        "audio_sample": audio_sample,
+                    }
+                )
+        entries.sort(key=lambda item: (item["type"], item["technical_name"].lower()))
+        return entries
+
+    def _filter_asset_viewer_entries(self, *_args):
+        if self.asset_viewer_tree is None:
+            return
+        search = (self.asset_viewer_search_var.get().strip().lower() if self.asset_viewer_search_var is not None else "")
+        type_filter = self.asset_viewer_type_var.get().strip().lower() if self.asset_viewer_type_var is not None else "all"
+        self.asset_viewer_tree.delete(*self.asset_viewer_tree.get_children())
+        self.asset_viewer_filtered_entries = []
+        for entry in self.asset_viewer_entries:
+            haystack = f'{entry["technical_name"]} {entry["file_name"]} {entry["type"]}'.lower()
+            if search and search not in haystack:
+                continue
+            entry_type = entry["type"]
+            if type_filter == "images" and entry_type not in {"Texture2D", "Sprite"}:
+                continue
+            if type_filter == "audio" and entry_type != "AudioClip":
+                continue
+            item_id = self.asset_viewer_tree.insert("", "end", values=(entry["technical_name"], entry["file_name"], entry["type"]))
+            self.asset_viewer_tree.set(item_id, "object_id", str(entry["object_id"]))
+            self.asset_viewer_filtered_entries.append((item_id, entry))
+
+    def _play_asset_audio_sample(self, sample_name, sample_bytes):
+        self._stop_asset_audio()
+        suffix = Path(sample_name).suffix or ".wav"
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        temp_file.write(sample_bytes)
+        temp_file.close()
+        self.asset_viewer_audio_temp_path = temp_file.name
+        if suffix.lower() == ".wav":
+            winsound.PlaySound(temp_file.name, winsound.SND_ASYNC | winsound.SND_FILENAME)
+            return
+        alias = "sgm_asset_audio"
+        ctypes.windll.winmm.mciSendStringW(f'open "{temp_file.name}" type mpegvideo alias {alias}', None, 0, None)
+        ctypes.windll.winmm.mciSendStringW(f"play {alias}", None, 0, None)
+
+    def _show_selected_asset_preview(self, _event=None):
+        if self.asset_viewer_tree is None or self.asset_viewer_preview_label is None:
+            return
+        selection = self.asset_viewer_tree.selection()
+        if not selection:
+            return
+        selected_id = selection[0]
+        entry = next((entry for item_id, entry in self.asset_viewer_filtered_entries if item_id == selected_id), None)
+        if entry is None:
+            return
+        self._stop_asset_audio()
+        preview_text = f'Tech: {entry["technical_name"]}\nBundle: {entry["file_name"]}\nType: {entry["type"]}'
+        if entry["preview_image"] is not None:
+            self.asset_viewer_preview_image = entry["preview_image"]
+            self.asset_viewer_preview_label.configure(image=self.asset_viewer_preview_image, text=preview_text, compound="top")
+        else:
+            self.asset_viewer_preview_image = None
+            self.asset_viewer_preview_label.configure(image="", text=preview_text)
+        if self.asset_viewer_audio_info_var is not None:
+            if entry["audio_sample"] is not None:
+                sample_name, sample_bytes = entry["audio_sample"]
+                self.asset_viewer_audio_info_var.set(f"Audio: {sample_name} ({len(sample_bytes)} bytes)")
+            else:
+                self.asset_viewer_audio_info_var.set("Audio: not available")
+
+    def _play_selected_asset_audio(self):
+        if self.asset_viewer_tree is None:
+            return
+        selection = self.asset_viewer_tree.selection()
+        if not selection:
+            return
+        selected_id = selection[0]
+        entry = next((entry for item_id, entry in self.asset_viewer_filtered_entries if item_id == selected_id), None)
+        if entry is None or entry["audio_sample"] is None:
+            return
+        sample_name, sample_bytes = entry["audio_sample"]
+        self._play_asset_audio_sample(sample_name, sample_bytes)
+
+    def close_asset_viewer_window(self):
+        self._stop_asset_audio()
+        if self.asset_viewer_window is not None and self.asset_viewer_window.winfo_exists():
+            try:
+                self.asset_viewer_window.grab_release()
+            except tk.TclError:
+                pass
+            self.asset_viewer_window.destroy()
+        self.asset_viewer_window = None
+        self.asset_viewer_tree = None
+        self.asset_viewer_entries = []
+        self.asset_viewer_filtered_entries = []
+        self.asset_viewer_bundle_paths = []
+        self.asset_viewer_bundle_var = None
+        self.asset_viewer_type_var = None
+        self.asset_viewer_preview_label = None
+        self.asset_viewer_preview_image = None
+        self.asset_viewer_audio_info_var = None
+        self.asset_viewer_search_var = None
+        self._focus_editor_widget()
+
+    def open_lmr_asset_viewer(self):
+        if self.asset_viewer_window is not None and self.asset_viewer_window.winfo_exists():
+            self.asset_viewer_window.lift()
+            self.asset_viewer_window.focus_force()
+            return
+        try:
+            entries = self._load_lmr_asset_entries()
+        except Exception as error:
+            messagebox.showwarning("Bundle Viewer", str(error), parent=self.root)
+            return
+
+        width = 1120
+        height = 720
+        window = tk.Toplevel(self.root)
+        window.transient(self.root)
+        window.configure(bg=TRANSPARENT_COLOR)
+        window.overrideredirect(True)
+        try:
+            window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
+        except tk.TclError:
+            pass
+        window.geometry(f"{width}x{height}+{self.root.winfo_x() + 140}+{self.root.winfo_y() + 80}")
+        canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
+        canvas.pack()
+        self._draw_window_frame(canvas, width, height)
+        canvas.create_text(width // 2, 16, text="LMR Bundle Viewer", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        drag_zone = canvas.create_rectangle(18, 10, width - 18, 42, outline="", fill="")
+
+        drag_state = {"x": 0, "y": 0}
+        def start_drag(event):
+            drag_state["x"] = event.x_root - window.winfo_x()
+            drag_state["y"] = event.y_root - window.winfo_y()
+        def drag_window(event):
+            window.geometry(f"+{event.x_root - drag_state['x']}+{event.y_root - drag_state['y']}")
+        canvas.tag_bind(drag_zone, "<ButtonPress-1>", start_drag)
+        canvas.tag_bind(drag_zone, "<B1-Motion>", drag_window)
+
+        self.asset_viewer_window = window
+        self.asset_viewer_entries = entries
+        self.asset_viewer_filtered_entries = []
+        self.asset_viewer_bundle_paths = []
+        self.asset_viewer_bundle_var = None
+        self.asset_viewer_search_var = tk.StringVar()
+        self.asset_viewer_type_var = tk.StringVar(value="All")
+        self.asset_viewer_search_var.trace_add("write", self._filter_asset_viewer_entries)
+        self.asset_viewer_type_var.trace_add("write", self._filter_asset_viewer_entries)
+        self.asset_viewer_audio_info_var = tk.StringVar(value="Audio: not available")
+
+        search_entry = tk.Entry(window, textvariable=self.asset_viewer_search_var, font=("Cascadia Mono", 9), bg="#101010", fg="#f0f0f0", insertbackground="#56f4ee", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+        canvas.create_window(24, 54, anchor="nw", window=search_entry, width=430, height=24)
+
+        type_combo = ttk.Combobox(window, textvariable=self.asset_viewer_type_var, values=["All", "Images", "Audio"], state="readonly")
+        canvas.create_window(470, 54, anchor="nw", window=type_combo, width=120, height=24)
+
+        self._create_composite_button(window, canvas, width - 118, 52, "Close", 56, 24, self.close_asset_viewer_window)
+        self._create_composite_button(window, canvas, 736, 644, "Play", 56, 24, self._play_selected_asset_audio)
+        self._create_composite_button(window, canvas, 828, 644, "Stop", 56, 24, self._stop_asset_audio)
+
+        tree = ttk.Treeview(window, columns=("technical_name", "file_name", "type", "object_id"), show="headings", selectmode="browse")
+        tree.heading("technical_name", text="Technical Name")
+        tree.heading("file_name", text="Bundle")
+        tree.heading("type", text="Type")
+        tree.column("technical_name", width=360, anchor="w")
+        tree.column("file_name", width=180, anchor="w")
+        tree.column("type", width=110, anchor="w")
+        tree.column("object_id", width=0, stretch=False)
+        tree["displaycolumns"] = ("technical_name", "file_name", "type")
+        tree.bind("<<TreeviewSelect>>", self._show_selected_asset_preview)
+        canvas.create_window(24, 88, anchor="nw", window=tree, width=660, height=610)
+        self.asset_viewer_tree = tree
+
+        preview_frame = tk.Frame(window, bg="#101010", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+        canvas.create_window(708, 88, anchor="nw", window=preview_frame, width=388, height=540)
+        self.asset_viewer_preview_label = tk.Label(preview_frame, bg="#101010", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), justify="left", anchor="n", compound="top", wraplength=360)
+        self.asset_viewer_preview_label.place(x=12, y=12, width=364, height=504)
+        audio_info = tk.Label(window, textvariable=self.asset_viewer_audio_info_var, bg=TRANSPARENT_COLOR, fg="#56f4ee", font=("Cascadia Mono", 8, "bold"), anchor="w", justify="left")
+        canvas.create_window(708, 612, anchor="nw", window=audio_info, width=320, height=20)
+
+        self._filter_asset_viewer_entries()
+        if tree.get_children():
+            first_item = tree.get_children()[0]
+            tree.selection_set(first_item)
+            tree.focus(first_item)
+            self._show_selected_asset_preview()
+
+        window.bind("<Escape>", lambda _e: self.close_asset_viewer_window())
+        window.deiconify()
+        window.lift()
+        window.focus_force()
+
+    def _resolve_lmr_game_data_dir(self, selected_dir: Path) -> Path:
+        candidates = []
+        if selected_dir.name.endswith("_Data"):
+            candidates.append(selected_dir)
+        candidates.append(selected_dir / "Love, Money, Rock'n'Roll_Data")
+        for child in selected_dir.glob("*_Data"):
+            candidates.append(child)
+        seen = set()
+        for candidate in candidates:
+            candidate = candidate.resolve()
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            bundle_dir = candidate / "StreamingAssets" / "aa" / "StandaloneWindows64"
+            if bundle_dir.exists():
+                return candidate
+        raise FileNotFoundError("Could not find Love, Money, Rock'n'Roll_Data with bundle files in the selected folder.")
+
+    def _get_unity_fallback_version_for_game_data(self, game_data_dir: Path) -> str:
+        fallback_version = LMR_FALLBACK_UNITY_VERSION
+        resources_assets_path = game_data_dir / "resources.assets"
+        if UnityPy is None or not resources_assets_path.exists():
+            return fallback_version
+        try:
+            env = UnityPy.load(str(resources_assets_path))
+            for asset_file in env.files.values():
+                unity_version = str(getattr(asset_file, "unity_version", "") or "").strip()
+                if unity_version:
+                    return unity_version
+        except Exception:
+            pass
+        return fallback_version
+
+    def _sanitize_export_file_name(self, name: str, fallback: str, extension: str) -> str:
+        cleaned = re.sub(r'[^A-Za-z0-9._-]+', '_', (name or '').strip())
+        cleaned = cleaned.strip('._')
+        if not cleaned:
+            cleaned = fallback
+        if not cleaned.lower().endswith(extension.lower()):
+            cleaned += extension
+        return cleaned
+
+    def _make_unique_path(self, path: Path) -> Path:
+        if not path.exists():
+            return path
+        stem = path.stem
+        suffix = path.suffix
+        counter = 2
+        while True:
+            candidate = path.with_name(f"{stem}_{counter}{suffix}")
+            if not candidate.exists():
+                return candidate
+            counter += 1
+
+    def _save_unity_image_asset(self, data, output_path: Path) -> bool:
+        if Image is None:
+            return False
+        try:
+            pil_image = getattr(data, "image", None)
+        except Exception:
+            return False
+        if not isinstance(pil_image, Image.Image):
+            return False
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        pil_image.save(output_path)
+        return True
+
+    def _save_unity_audio_asset(self, data, base_name: str, output_dir: Path, fallback_prefix: str) -> int:
+        samples = getattr(data, "samples", None)
+        if not samples:
+            return 0
+        output_dir.mkdir(parents=True, exist_ok=True)
+        exported = 0
+        for sample_name, sample_bytes in samples.items():
+            suffix = Path(sample_name).suffix or ".wav"
+            file_name = self._sanitize_export_file_name(Path(sample_name).stem, f"{fallback_prefix}_{exported}", suffix)
+            target_path = self._make_unique_path(output_dir / file_name)
+            target_path.write_bytes(sample_bytes)
+            exported += 1
+        return exported
+
+    def _extract_lmr_bundles_worker(self, game_dir_str: str, output_dir_str: str, progress_queue):
+        try:
+            if UnityPy is None:
+                raise RuntimeError("UnityPy is not installed.")
+            game_data_dir = self._resolve_lmr_game_data_dir(Path(game_dir_str))
+            bundle_dir = game_data_dir / "StreamingAssets" / "aa" / "StandaloneWindows64"
+            bundle_paths = sorted(bundle_dir.glob("*.bundle"))
+            if not bundle_paths:
+                raise FileNotFoundError("No .bundle files were found in the selected game folder.")
+
+            if hasattr(UnityPy, "config"):
+                try:
+                    UnityPy.config.FALLBACK_UNITY_VERSION = self._get_unity_fallback_version_for_game_data(game_data_dir)
+                except Exception:
+                    pass
+
+            output_root = Path(output_dir_str)
+            sprites_dir = output_root / "sprites"
+            textures_dir = output_root / "textures"
+            audio_dir = output_root / "audio"
+            sprites_dir.mkdir(parents=True, exist_ok=True)
+            textures_dir.mkdir(parents=True, exist_ok=True)
+            audio_dir.mkdir(parents=True, exist_ok=True)
+
+            counts = {"sprites": 0, "textures": 0, "audio": 0, "failed_bundles": 0}
+            for index, bundle_path in enumerate(bundle_paths, start=1):
+                progress_queue.put(("progress", f"[{index}/{len(bundle_paths)}] {bundle_path.name}"))
+                try:
+                    env = UnityPy.load(str(bundle_path))
+                except Exception:
+                    counts["failed_bundles"] += 1
+                    continue
+
+                for obj_index, obj in enumerate(env.objects):
+                    try:
+                        data = obj.read()
+                    except Exception:
+                        continue
+                    asset_type = str(getattr(obj.type, "name", obj.type))
+                    raw_name = (getattr(data, "m_Name", "") or getattr(data, "name", "") or "").strip()
+                    base_name = raw_name or f"{bundle_path.stem}_{asset_type.lower()}_{obj.path_id or obj_index}"
+
+                    if asset_type == "Sprite":
+                        file_name = self._sanitize_export_file_name(base_name, f"sprite_{obj.path_id}", ".png")
+                        target_path = self._make_unique_path(sprites_dir / file_name)
+                        if self._save_unity_image_asset(data, target_path):
+                            counts["sprites"] += 1
+                    elif asset_type == "Texture2D":
+                        file_name = self._sanitize_export_file_name(base_name, f"texture_{obj.path_id}", ".png")
+                        target_path = self._make_unique_path(textures_dir / file_name)
+                        if self._save_unity_image_asset(data, target_path):
+                            counts["textures"] += 1
+                    elif asset_type == "AudioClip":
+                        counts["audio"] += self._save_unity_audio_asset(data, base_name, audio_dir, f"audio_{obj.path_id}")
+
+            progress_queue.put(("done", counts, str(output_root)))
+        except Exception as error:
+            progress_queue.put(("error", str(error)))
+
+    def _poll_lmr_bundle_extractor(self, progress_window, status_var, result_queue):
+        try:
+            while True:
+                message = result_queue.get_nowait()
+                kind = message[0]
+                if kind == "progress":
+                    status_var.set(message[1])
+                elif kind == "done":
+                    counts, output_root = message[1], message[2]
+                    if progress_window.winfo_exists():
+                        progress_window.destroy()
+                    messagebox.showinfo(
+                        "LMR Bundle Extractor",
+                        f"Export completed.\\n\\nSprites: {counts['sprites']}\\nTextures: {counts['textures']}\\nAudio files: {counts['audio']}\\nFailed bundles: {counts['failed_bundles']}\\n\\nOutput: {output_root}",
+                        parent=self.root,
+                    )
+                    self._focus_editor_widget()
+                    return
+                elif kind == "error":
+                    if progress_window.winfo_exists():
+                        progress_window.destroy()
+                    messagebox.showwarning("LMR Bundle Extractor", message[1], parent=self.root)
+                    self._focus_editor_widget()
+                    return
+        except queue.Empty:
+            if progress_window.winfo_exists():
+                progress_window.after(120, lambda: self._poll_lmr_bundle_extractor(progress_window, status_var, result_queue))
+
+    def open_lmr_bundle_extractor(self):
+        initial_game_dir = self.app_settings.get("default_lmr_game_dir") or str(LMR_GAME_DATA_DIR.parent)
+        game_dir = filedialog.askdirectory(parent=self.root, title="Select LMR game folder", initialdir=initial_game_dir)
+        if not game_dir:
+            return
+        output_dir = filedialog.askdirectory(parent=self.root, title="Select output folder", initialdir=str(Path(game_dir)))
+        if not output_dir:
+            return
+
+        progress_window = tk.Toplevel(self.root)
+        progress_window.transient(self.root)
+        progress_window.title("LMR Bundle Extractor")
+        progress_window.resizable(False, False)
+        progress_window.geometry(f"420x120+{self.root.winfo_x() + 180}+{self.root.winfo_y() + 140}")
+        progress_window.configure(bg="#111111")
+        progress_window.protocol("WM_DELETE_WINDOW", progress_window.destroy)
+
+        title_label = tk.Label(progress_window, text="Extracting bundle assets...", font=("Cascadia Mono", 11, "bold"), fg="#56f4ee", bg="#111111")
+        title_label.pack(pady=(18, 10))
+        status_var = tk.StringVar(value="Preparing...")
+        status_label = tk.Label(progress_window, textvariable=status_var, font=("Cascadia Mono", 9), fg="#f0f0f0", bg="#111111", wraplength=380, justify="center")
+        status_label.pack(padx=20)
+
+        result_queue = queue.Queue()
+        worker = threading.Thread(target=self._extract_lmr_bundles_worker, args=(game_dir, output_dir, result_queue), daemon=True)
+        worker.start()
+        progress_window.after(120, lambda: self._poll_lmr_bundle_extractor(progress_window, status_var, result_queue))
+
     def _detect_project_type(self) -> str | None:
         if self.project_dir is None:
             return None
@@ -3172,7 +3693,6 @@ class EditorApp:
         )
 
         add_panel_label(lmr_frame, lmr_cfg["resources_label_x"], lmr_cfg["resources_label_y"], "resources.yaml sections")
-        add_panel_text(lmr_frame, lmr_cfg["resources_note_x"], lmr_cfg["resources_note_y"], "Choose base nodes for the initial resources.yaml template.", "#9aa0a0", 560)
         section_labels = [
             ("backdrop_bg", "backdrop_bg"),
             ("backdrop_text", "backdrop_text"),
