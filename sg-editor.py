@@ -1458,7 +1458,11 @@ class EditorApp:
         widget.bind("<Leave>", lambda _e: draw_state("idle"))
         widget.bind("<ButtonPress-1>", lambda _e: draw_state("clicked"))
         widget.bind("<ButtonRelease-1>", lambda _e: (draw_state("onmouse"), action()))
-        window_item = parent_canvas.create_window(x, y, anchor="nw", window=widget, width=total_width, height=height)
+        if parent_canvas is None:
+            widget.place(x=x, y=y, width=total_width, height=height)
+            window_item = None
+        else:
+            window_item = parent_canvas.create_window(x, y, anchor="nw", window=widget, width=total_width, height=height)
         return widget, window_item
 
     def _draw_window_frame(self, canvas, width, height):
@@ -2705,10 +2709,10 @@ class EditorApp:
                 window.focus_force()
 
         browse_game_widget, _browse_game_item = self._create_composite_button(
-            window,
-            canvas,
-            cfg["content_x"] + general_cfg["browse_x"],
-            cfg["content_y"] + general_cfg["browse_y"],
+            general_frame,
+            None,
+            general_cfg["browse_x"],
+            general_cfg["browse_y"],
             "Browse",
             general_cfg["browse_width"],
             24,
@@ -2767,10 +2771,10 @@ class EditorApp:
             window.focus_force()
 
         browse_cover_widget, _browse_cover_item = self._create_composite_button(
-            window,
-            canvas,
-            cfg["content_x"] + lmr_cfg["cover_button_x"],
-            cfg["content_y"] + lmr_cfg["cover_button_y"],
+            lmr_frame,
+            None,
+            lmr_cfg["cover_button_x"],
+            lmr_cfg["cover_button_y"],
             "Choose",
             lmr_cfg["cover_button_width"],
             24,
@@ -2898,7 +2902,7 @@ class EditorApp:
             project_id = project_id_var.get().strip()
 
             if game_id == "es2":
-                show_project_warning("Locked", "Everlasting Summer: 2 is currently locked.")
+                show_project_warning("Unavailable", "Everlasting Summer: 2 isn't released.")
                 return
             if not game_root.exists():
                 show_project_warning("Invalid Folder", "Select a valid game folder.")
