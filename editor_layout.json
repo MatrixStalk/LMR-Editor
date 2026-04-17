@@ -276,13 +276,15 @@
   },
   "create_file_window": {
     "width": 520,
-    "height_lmr": 350,
+    "height_lmr": 400,
     "height_es": 250,
     "title_x": 260,
     "title_y": 20,
     "type_x": 28,
     "type_y": 56,
     "type_step_y": 26,
+    "type_item_width_lmr": 260,
+    "type_item_width_es": 220,
     "file_name_label_x": 28,
     "file_name_label_y_lmr": 176,
     "file_name_label_y_es": 120,
@@ -304,7 +306,7 @@
     "folder_note_y": 290,
     "return_x": 270,
     "create_x": 390,
-    "actions_y_lmr": 306,
+    "actions_y_lmr": 346,
     "actions_y_es": 206
   }
 }

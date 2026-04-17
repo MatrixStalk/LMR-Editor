@@ -324,6 +324,8 @@ DEFAULT_LAYOUT = {
         "type_x": 28,
         "type_y": 56,
         "type_step_y": 26,
+        "type_item_width_lmr": 260,
+        "type_item_width_es": 220,
         "file_name_label_x": 28,
         "file_name_label_y_lmr": 176,
         "file_name_label_y_es": 120,
@@ -2674,11 +2676,11 @@ class EditorApp:
 
         add_label(cfg["type_x"], cfg["type_y"], "Type")
         if project_type == "lmr":
-            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"], "Scenario TXT", kind_var, "scenario_txt")
-            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"] * 2, "YAML (resources signature)", kind_var, "yaml_resources", width_px=260)
-            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"] * 3, "YAML (meta signature)", kind_var, "yaml_meta", width_px=240)
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"], "Scenario TXT", kind_var, "scenario_txt", width_px=cfg["type_item_width_lmr"])
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"] * 2, "YAML (resources signature)", kind_var, "yaml_resources", width_px=cfg["type_item_width_lmr"])
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"] * 3, "YAML (meta signature)", kind_var, "yaml_meta", width_px=cfg["type_item_width_lmr"])
         else:
-            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"], "Ren'Py Script (.rpy)", kind_var, "rpy_script", width_px=220)
+            create_asset_toggle(cfg["type_x"], cfg["type_y"] + cfg["type_step_y"], "Ren'Py Script (.rpy)", kind_var, "rpy_script", width_px=cfg["type_item_width_es"])
 
         add_label(cfg["file_name_label_x"], cfg["file_name_label_y_lmr"] if project_type == "lmr" else cfg["file_name_label_y_es"], "File Name")
         name_entry = add_entry(cfg["file_name_entry_x"], cfg["file_name_entry_y_lmr"] if project_type == "lmr" else cfg["file_name_entry_y_es"], cfg["file_name_entry_width"], name_var)
