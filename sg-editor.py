@@ -807,6 +807,7 @@ class EditorApp:
         self.editor_text.bind("<KeyRelease>", self._handle_editor_key_release)
         self.editor_text.bind("<ButtonRelease>", lambda _e: self._update_status(refresh_lines=False))
         self.editor_text.bind("<Button-3>", self._show_editor_context_menu)
+        self._configure_editor_syntax_tags()
         self.canvas.create_window(editor["x"], editor["y"], anchor="nw", window=self.editor_text, width=editor["width"], height=editor["height"])
 
         line_numbers = self.layout["line_numbers"]
@@ -974,6 +975,75 @@ class EditorApp:
         self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
         return item
 
+    def _configure_editor_syntax_tags(self):
+        if self.editor_text is None:
+            return
+        tag_colors = {
+            "syntax_comment": "#6a9955",
+            "syntax_string": "#ce9178",
+            "syntax_number": "#b5cea8",
+            "syntax_keyword": "#4fc1ff",
+            "syntax_operator": "#d4d4d4",
+            "syntax_section": "#c586c0",
+            "syntax_boolean": "#569cd6",
+            "syntax_property": "#9cdcfe",
+        }
+        for tag_name, color in tag_colors.items():
+            self.editor_text.tag_configure(tag_name, foreground=color)
+
+    def _clear_editor_syntax_tags(self):
+        if self.editor_text is None:
+            return
+        for tag_name in (
+            "syntax_comment",
+            "syntax_string",
+            "syntax_number",
+            "syntax_keyword",
+            "syntax_operator",
+            "syntax_section",
+            "syntax_boolean",
+            "syntax_property",
+        ):
+            self.editor_text.tag_remove(tag_name, "1.0", "end")
+
+    def _apply_tag_matches(self, tag_name: str, pattern: str, flags=0):
+        if self.editor_text is None:
+            return
+        content = self._get_editor_content()
+        for match in re.finditer(pattern, content, flags):
+            start = f"1.0+{match.start()}c"
+            end = f"1.0+{match.end()}c"
+            self.editor_text.tag_add(tag_name, start, end)
+
+    def _apply_editor_syntax_highlighting(self):
+        if self.editor_text is None:
+            return
+        self._clear_editor_syntax_tags()
+        path = self.current_file
+        suffix = path.suffix.lower() if path is not None else ""
+        content = self._get_editor_content()
+        if not content:
+            return
+
+        self._apply_tag_matches("syntax_string", r'"([^"\\]|\\.)*"|\'([^\'\\]|\\.)*\'')
+        self._apply_tag_matches("syntax_number", r'(?<![A-Za-z0-9_])[-+]?(?:\d+\.\d+|\d+)(?![A-Za-z0-9_])')
+
+        if suffix in {".yaml", ".yml"}:
+            self._apply_tag_matches("syntax_comment", r'(?m)^\s*#.*$')
+            self._apply_tag_matches("syntax_section", r'(?m)^[A-Za-z_][A-Za-z0-9_]*\s*:(?=\s*$|\s)')
+            self._apply_tag_matches("syntax_property", r'(?m)^\s{4,}[A-Za-z_][A-Za-z0-9_]*\s*:')
+            self._apply_tag_matches("syntax_boolean", r'(?i)\b(?:true|false|null|yes|no|on|off)\b')
+        elif suffix in {".json", ".toml"}:
+            self._apply_tag_matches("syntax_property", r'(?m)"[^"\\]+"\s*:')
+            self._apply_tag_matches("syntax_boolean", r'(?i)\b(?:true|false|null)\b')
+        elif suffix in {".rpy", ".rpym", ".py", ".txt", ".md"}:
+            self._apply_tag_matches("syntax_comment", r'(?m)#.*$')
+            self._apply_tag_matches("syntax_keyword", r'\b(?:label|scene|show|hide|jump|call|menu|screen|init|define|default|transform|image|return|if|elif|else|python|while|for|in|pass|extends)\b')
+            self._apply_tag_matches("syntax_boolean", r'\b(?:True|False|None)\b')
+            self._apply_tag_matches("syntax_operator", r'\$|->|==|!=|<=|>=|=|:')
+        else:
+            self._apply_tag_matches("syntax_comment", r'(?m)#.*$')
+
     def _is_file_dirty(self, path: Path) -> bool:
         return self.file_buffers.get(path, "") != self.saved_file_snapshots.get(path, "")
 
@@ -983,6 +1053,7 @@ class EditorApp:
         self.editor_text.delete("1.0", "end")
         self.editor_text.insert("1.0", content)
         self._apply_editor_scroll_space()
+        self._apply_editor_syntax_highlighting()
 
     def _get_editor_content(self) -> str:
         if self.editor_text is None:
@@ -1008,6 +1079,7 @@ class EditorApp:
 
     def _handle_editor_key_release(self, _event=None):
         self._update_current_buffer()
+        self._apply_editor_syntax_highlighting()
         self._update_status(refresh_lines=True)
         self._request_render_file_tabs()
 
@@ -2507,6 +2579,58 @@ class EditorApp:
         self._update_status()
         self._update_presence()
         self._request_render_file_tabs()
+
+    def _get_project_game_name(self) -> str:
+        project_type = self._detect_project_type()
+        if project_type == "lmr":
+            return "Love, Money, Rock'n'Roll"
+        if project_type == "es":
+            return "Everlasting Summer"
+        return "No project open"
+
+    def _get_lmr_project_display_name(self) -> str | None:
+        if self.project_dir is None:
+            return None
+        meta_path = self.project_dir / "meta.yaml"
+        if not meta_path.exists():
+            return None
+        try:
+            lines = meta_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return None
+        in_title = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped == "title:":
+                in_title = True
+                continue
+            if in_title and stripped and not line.startswith(" "):
+                break
+            if in_title and stripped.startswith("ru:"):
+                value = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+                return value or None
+        return None
+
+    def _get_es_project_display_name(self) -> str | None:
+        if self.project_dir is None:
+            return None
+        for path in sorted(self.project_dir.glob("*.rpy")):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            match = re.search(r"""mods\[['"][^'"]+['"]\]\s*=\s*u?['"](.+?)['"]""", content)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    def _get_presence_project_name(self) -> str:
+        project_type = self._detect_project_type()
+        if project_type == "lmr":
+            return self._get_lmr_project_display_name() or (self.project_dir.name if self.project_dir else "No project open")
+        if project_type == "es":
+            return self._get_es_project_display_name() or (self.project_dir.name if self.project_dir else "No project open")
+        return self.project_dir.name if self.project_dir else "No project open"
 
     def _slugify_project_id(self, value: str) -> str:
         slug = re.sub(r"[^a-z0-9_]+", "_", value.lower())
@@ -4795,17 +4919,17 @@ class EditorApp:
         self._schedule_line_numbers_refresh()
 
     def _update_status(self, refresh_lines=True):
-        project_name = self.project_dir.name if self.project_dir else "No project open"
+        game_name = self._get_project_game_name()
         current_name = self.current_file.name if self.current_file else "No file open"
-        line, column = self.editor_text.index("insert").split(".")
-        self.canvas.itemconfigure(self.mode_id, text=f"Mode: {project_name}")
+        line, column = self.editor_text.index("insert").split(".") if self.editor_text is not None else ("1", "0")
+        self.canvas.itemconfigure(self.mode_id, text=f"Mode: {game_name}")
         self.canvas.itemconfigure(self.cursor_id, text=f"{current_name}   String: {line}   Column: {column}")
         if refresh_lines:
             self._refresh_line_numbers()
 
     def _update_presence(self):
-        project_name = self.project_dir.name if self.project_dir else "No project open"
-        file_name = self.current_file.name if self.current_file else "No file open"
+        project_name = self._get_presence_project_name()
+        file_name = self._get_project_game_name()
         self.discord.update(project_name, file_name)
 
     def _presence_loop(self):
