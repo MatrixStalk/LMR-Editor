@@ -2414,6 +2414,27 @@ class EditorApp:
         self._draw_window_frame(canvas, width, height)
         canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
 
+        def run_project_dialog(callback):
+            try:
+                window.wm_attributes("-topmost", False)
+            except tk.TclError:
+                pass
+            try:
+                return callback()
+            finally:
+                try:
+                    window.wm_attributes("-topmost", True)
+                except tk.TclError:
+                    pass
+                try:
+                    window.lift()
+                    window.focus_force()
+                except tk.TclError:
+                    pass
+
+        def show_project_warning(title, message):
+            return run_project_dialog(lambda: messagebox.showwarning(title, message, parent=window))
+
         panel_bg = "#101010"
         panel_border = "#1d1d1d"
         game_var = tk.StringVar(value="lmr")
@@ -2605,7 +2626,7 @@ class EditorApp:
         game_folder_entry = add_panel_entry(general_frame, general_cfg["game_folder_entry_x"], general_cfg["game_folder_entry_y"], general_cfg["game_folder_entry_width"], game_path_var)
 
         def browse_game_folder():
-            folder = filedialog.askdirectory(title="Select game folder")
+            folder = run_project_dialog(lambda: filedialog.askdirectory(title="Select game folder", parent=window))
             if folder:
                 game_path_var.set(folder)
                 window.lift()
@@ -2632,13 +2653,16 @@ class EditorApp:
         add_panel_label(lmr_frame, lmr_cfg["cover_label_x"], lmr_cfg["cover_label_y"], "Cover")
         cover_entry = add_panel_entry(lmr_frame, lmr_cfg["cover_entry_x"], lmr_cfg["cover_entry_y"], lmr_cfg["cover_entry_width"], cover_path_var)
         add_panel_label(lmr_frame, lmr_cfg["cover_warning_label_x"], lmr_cfg["cover_warning_label_y"], "Cover warning:", "#56f4ee")
-        add_panel_text(lmr_frame, lmr_cfg["cover_warning_1_x"], lmr_cfg["cover_warning_1_y"], "max 2 MB", "#d7d9d7", 130)
-        add_panel_text(lmr_frame, lmr_cfg["cover_warning_2_x"], lmr_cfg["cover_warning_2_y"], "recommended 445x200", "#d7d9d7", 130)
+        add_panel_text(lmr_frame, lmr_cfg["cover_warning_1_x"], lmr_cfg["cover_warning_1_y"], "optional, not required", "#d7d9d7", 150)
+        add_panel_text(lmr_frame, lmr_cfg["cover_warning_2_x"], lmr_cfg["cover_warning_2_y"], "2 MB / 445x200 recommended", "#d7d9d7", 170)
 
         def browse_cover_file():
-            path = filedialog.askopenfilename(
-                title="Select cover image",
-                filetypes=[("Image files", "*.png;*.jpg;*.jpeg"), ("PNG", "*.png"), ("JPEG", "*.jpg;*.jpeg")],
+            path = run_project_dialog(
+                lambda: filedialog.askopenfilename(
+                    title="Select cover image",
+                    filetypes=[("Image files", "*.png;*.jpg;*.jpeg"), ("PNG", "*.png"), ("JPEG", "*.jpg;*.jpeg")],
+                    parent=window,
+                )
             )
             if not path:
                 return
@@ -2658,7 +2682,7 @@ class EditorApp:
                 except OSError:
                     pass
             if warnings:
-                messagebox.showwarning("Cover Warning", "\n".join(warnings))
+                show_project_warning("Cover Warning", "\n".join(warnings))
             window.lift()
             window.focus_force()
 
@@ -2752,13 +2776,13 @@ class EditorApp:
             project_id = project_id_var.get().strip()
 
             if game_id == "es2":
-                messagebox.showwarning("Locked", "Everlasting Summer: 2 is currently locked.")
+                show_project_warning("Locked", "Everlasting Summer: 2 is currently locked.")
                 return
             if not game_root.exists():
-                messagebox.showwarning("Invalid Folder", "Select a valid game folder.")
+                show_project_warning("Invalid Folder", "Select a valid game folder.")
                 return
             if not self._is_valid_project_id(project_id):
-                messagebox.showwarning("Invalid Project ID", "Project ID may contain only latin letters, digits and underscores.")
+                show_project_warning("Invalid Project ID", "Project ID may contain only latin letters, digits and underscores.")
                 return
 
             if game_id == "lmr":
@@ -2769,12 +2793,12 @@ class EditorApp:
                 mods_root = game_root / "game" / "mods"
 
             if not (game_root / exe_name).exists():
-                messagebox.showwarning("Game Not Found", f"Required file was not found:\n{game_root / exe_name}")
+                show_project_warning("Game Not Found", f"Required file was not found:\n{game_root / exe_name}")
                 return
 
             project_dir = mods_root / project_id
             if project_dir.exists() and any(project_dir.iterdir()):
-                messagebox.showwarning("Project Exists", f"Folder already exists and is not empty:\n{project_dir}")
+                show_project_warning("Project Exists", f"Folder already exists and is not empty:\n{project_dir}")
                 return
             mods_root.mkdir(parents=True, exist_ok=True)
             project_dir.mkdir(parents=True, exist_ok=True)
@@ -2784,7 +2808,7 @@ class EditorApp:
                 description = lmr_description_widget.get("1.0", "end-1c").strip()
                 version = lmr_version_var.get().strip() or "0.1.0"
                 if not title:
-                    messagebox.showwarning("Missing Title", "Enter title for meta.yaml.")
+                    show_project_warning("Missing Title", "Enter title for meta.yaml.")
                     return
                 selected_sections = [key for key, _label in section_labels if section_vars[key].get()]
                 resources_yaml = self._build_lmr_resources_yaml(selected_sections)
@@ -2805,7 +2829,7 @@ class EditorApp:
             else:
                 display_name = es_display_name_var.get().strip()
                 if not display_name:
-                    messagebox.showwarning("Missing Name", "Enter the translated display name for the mod.")
+                    show_project_warning("Missing Name", "Enter the translated display name for the mod.")
                     return
                 script_content = (
                     "init:\n\n"
