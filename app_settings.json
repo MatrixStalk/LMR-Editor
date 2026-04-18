@@ -1,6 +1,6 @@
 {
   "auto_reload_layout": true,
   "discord_rpc_enabled": true,
-  "default_lmr_game_dir": "",
-  "default_es_game_dir": ""
+  "default_lmr_game_dir": "C:/Program Files (x86)/Steam/steamapps/common/Love, Money, Rock-n-Roll",
+  "default_es_game_dir": "D:/SteamLibrary/steamapps/common/Everlasting Summer"
 }

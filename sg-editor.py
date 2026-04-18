@@ -952,6 +952,12 @@ class EditorApp:
             "button_clicked.png",
             "button_idle.png",
             "button_onmouse.png",
+            "button_play_clicked.png",
+            "button_play_idle.png",
+            "button_play_onmouse.png",
+            "button_stop_clicked.png",
+            "button_stop_idle.png",
+            "button_stop_onmouse.png",
             "button_border_left_clicked.png",
             "button_border_left_idle.png",
             "button_border_left_onmouse.png",
@@ -1011,6 +1017,15 @@ class EditorApp:
                     image = self._fit_icon(image, 208, 44)
                 elif name in {"checkbox_off.png", "checkbox_on.png", "checkbox_onmouse.png"}:
                     image = self._fit_icon(image, 18, 18)
+                elif name in {
+                    "button_play_idle.png",
+                    "button_play_onmouse.png",
+                    "button_play_clicked.png",
+                    "button_stop_idle.png",
+                    "button_stop_onmouse.png",
+                    "button_stop_clicked.png",
+                }:
+                    image = self._fit_icon(image, 24, 24)
                 elif name == "settings.png":
                     image = self._fit_icon(image, 96, 96)
                 elif name == "lunar_avatar.png":
@@ -2047,7 +2062,14 @@ class EditorApp:
         widget.bind("<Enter>", lambda _e: draw_state("onmouse"))
         widget.bind("<Leave>", lambda _e: draw_state("idle"))
         widget.bind("<ButtonPress-1>", lambda _e: draw_state("clicked"))
-        widget.bind("<ButtonRelease-1>", lambda _e: (draw_state("onmouse"), action()))
+        widget.bind(
+            "<ButtonRelease-1>",
+            lambda _e, pw=parent_window: (
+                draw_state("onmouse"),
+                action(),
+                pw.after_idle(lambda w=pw: self._restore_lmr_focus_widget(w)) if hasattr(pw, "after_idle") else None,
+            ),
+        )
         if parent_canvas is None:
             widget.place(x=x, y=y, width=total_width, height=height)
             window_item = None
@@ -4004,13 +4026,86 @@ class EditorApp:
 
     def _close_lmr_dialog(self, window):
         self._close_lmr_dialog_audio(window)
+        self._close_lmr_dialog_popups(window)
+        try:
+            current_grab = self.root.grab_current()
+        except tk.TclError:
+            current_grab = None
+        try:
+            if current_grab is not None and (
+                current_grab == window or str(current_grab).startswith(str(window))
+            ):
+                current_grab.grab_release()
+        except tk.TclError:
+            pass
         try:
             window.grab_release()
         except tk.TclError:
             pass
         if window.winfo_exists():
             window.destroy()
-        self._focus_editor_widget()
+        try:
+            self.root.lift()
+            self.root.focus_force()
+        except tk.TclError:
+            pass
+        try:
+            self.root.after(10, self._focus_editor_widget)
+        except tk.TclError:
+            self._focus_editor_widget()
+
+    def _close_lmr_dialog_popups(self, window):
+        if window is None:
+            return
+        stack = [window]
+        visited = set()
+        while stack:
+            widget = stack.pop()
+            try:
+                widget_id = str(widget)
+            except tk.TclError:
+                continue
+            if widget_id in visited:
+                continue
+            visited.add(widget_id)
+            popup = getattr(widget, "_popup", None)
+            try:
+                if popup is not None and popup.winfo_exists():
+                    popup.destroy()
+            except tk.TclError:
+                pass
+            try:
+                stack.extend(widget.winfo_children())
+            except tk.TclError:
+                pass
+
+    def _remember_lmr_focus_widget(self, window, widget):
+        if window is None or widget is None:
+            return
+        try:
+            if window.winfo_exists() and widget.winfo_exists():
+                window._lmr_last_focus_widget = widget  # type: ignore[attr-defined]
+                if getattr(window, "_lmr_default_focus_widget", None) is None:
+                    window._lmr_default_focus_widget = widget  # type: ignore[attr-defined]
+        except tk.TclError:
+            return
+
+    def _restore_lmr_focus_widget(self, window):
+        if window is None:
+            return
+        for attr_name in ("_lmr_last_focus_widget", "_lmr_default_focus_widget"):
+            widget = getattr(window, attr_name, None)
+            try:
+                if widget is not None and widget.winfo_exists() and widget.winfo_viewable():
+                    widget.focus_force()
+                    return
+            except tk.TclError:
+                pass
+        try:
+            if window.winfo_exists():
+                window.focus_force()
+        except tk.TclError:
+            pass
 
     def _create_lmr_dialog_button(self, window, label: str, x: int, y: int, action, middle_width: int | None = None):
         cfg = self.layout["lmr_resource_manager_window"]
@@ -4100,6 +4195,9 @@ class EditorApp:
         if readonly:
             entry.configure(state="readonly")
         entry.place(x=x, y=y, width=width, height=24)
+        entry.bind("<FocusIn>", lambda _e, w=window, widget=entry: self._remember_lmr_focus_widget(w, widget))
+        entry.bind("<Button-1>", lambda _e, w=window, widget=entry: self._remember_lmr_focus_widget(w, widget))
+        self._remember_lmr_focus_widget(window, entry)
         return entry, entry
 
     def _draw_lmr_dropdown_shell(self, shell, width: int, height: int, state_name: str, text: str):
@@ -4168,6 +4266,10 @@ class EditorApp:
                 return
             variable.set(not bool(variable.get()))
             refresh()
+            try:
+                window.after_idle(lambda w=window: self._restore_lmr_focus_widget(w))
+            except tk.TclError:
+                pass
 
         def on_enter(_event=None):
             if state["disabled"]:
@@ -4232,9 +4334,12 @@ class EditorApp:
             self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "idle", variable.get().strip())
             try:
                 window.lift()
-                window.focus_force()
             except tk.TclError:
                 pass
+            try:
+                window.after_idle(lambda w=window: self._restore_lmr_focus_widget(w))
+            except tk.TclError:
+                self._restore_lmr_focus_widget(window)
 
         def choose_value(selected):
             variable.set(selected)
@@ -4273,7 +4378,16 @@ class EditorApp:
         self._draw_lmr_dropdown_shell(shell, width, 24, "idle", variable.get().strip())
         shell.bind("<Enter>", lambda _e: self._draw_lmr_dropdown_shell(shell, width, 24, "onmouse", variable.get().strip()) if not getattr(shell, "_popup", None) else None)
         shell.bind("<Leave>", lambda _e: self._draw_lmr_dropdown_shell(shell, width, 24, "idle", variable.get().strip()) if not getattr(shell, "_popup", None) else None)
-        shell.bind("<Button-1>", lambda _e: self._open_lmr_dropdown_popup(window, shell, variable, list(values)))
+        def open_dropdown(_event=None, w=window):
+            focused = None
+            try:
+                focused = w.focus_get()
+            except tk.TclError:
+                focused = None
+            if focused is not None and focused is not shell:
+                self._remember_lmr_focus_widget(w, focused)
+            self._open_lmr_dropdown_popup(window, shell, variable, list(values))
+        shell.bind("<Button-1>", open_dropdown)
         variable.trace_add("write", lambda *_args: self._draw_lmr_dropdown_shell(shell, width, 24, "opened" if getattr(shell, "_popup", None) else "idle", variable.get().strip()))
         return shell, shell
 
@@ -4509,7 +4623,7 @@ class EditorApp:
         file_var.trace_add("write", lambda *_args, w=window: (self._close_lmr_dialog_audio(w), self._reset_lmr_dialog_audio_ui(w)))
         track_canvas.bind("<Button-1>", lambda event, w=window: (setattr(w, "_lmr_audio_track_pressed", True), self._handle_lmr_audio_track_event(w, event)))
         track_canvas.bind("<B1-Motion>", lambda event, w=window: self._handle_lmr_audio_track_event(w, event))
-        track_canvas.bind("<ButtonRelease-1>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_pressed", False), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0))))
+        track_canvas.bind("<ButtonRelease-1>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_pressed", False), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0)), self._restore_lmr_focus_widget(w)))
         track_canvas.bind("<Enter>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_hovered", True), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0))))
         track_canvas.bind("<Leave>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_hovered", False), setattr(w, "_lmr_audio_track_pressed", False), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0))))
 
@@ -4524,7 +4638,7 @@ class EditorApp:
                 return
             rel_path, _ = self._copy_lmr_asset_into_project(source, folder_var.get(), asset_name_var.get().strip() or None)
             self._upsert_lmr_named_entry("sound", key, [f"    {key}: {rel_path}"])
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", sound_cfg["cancel_x"], sound_cfg["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=sound_cfg["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", sound_cfg["add_x"], sound_cfg["add_y"], submit, middle_width=sound_cfg["add_width"])
@@ -4589,7 +4703,7 @@ class EditorApp:
                 f"        {locale_var.get().strip()}: {json.dumps(value, ensure_ascii=False)}",
             ]
             self._upsert_lmr_named_entry("backdrop_text", key, entry_lines)
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -4642,7 +4756,7 @@ class EditorApp:
             else:
                 rendered = raw_value or "0"
             self._upsert_lmr_named_entry("variables", key, [f"    {key}: {rendered}"])
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -4755,7 +4869,7 @@ class EditorApp:
                     return
                 entry_lines = lines
             self._upsert_lmr_named_entry("catalogs", key, entry_lines)
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -4822,7 +4936,7 @@ class EditorApp:
                 self._show_lmr_warning("Missing Color", "Enter a color value.", window)
                 return
             self._upsert_lmr_named_entry(section_name, key, [f"    {key}: {json.dumps(value, ensure_ascii=False)}"])
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -4880,7 +4994,7 @@ class EditorApp:
                 self._show_lmr_warning("Missing Text", "Enter at least one localized string.", window)
                 return
             self._upsert_lmr_named_entry(section_name, key, entry_lines)
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -4936,7 +5050,7 @@ class EditorApp:
                 f"        x: {x_var.get().strip() or defaults[0]}",
                 f"        y: {y_var.get().strip() or defaults[1]}",
             ])
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -4992,7 +5106,7 @@ class EditorApp:
             if condition_var.get().strip():
                 entry_lines.append(f"        condition: {json.dumps(condition_var.get().strip(), ensure_ascii=False)}")
             self._upsert_lmr_named_entry("transitions", key, entry_lines)
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -5038,7 +5152,7 @@ class EditorApp:
                 self._show_lmr_warning("Missing Scenario", "Choose a scenario ID.", window)
                 return
             self._upsert_lmr_top_level_scalar("entryPoint", value)
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
@@ -5164,7 +5278,7 @@ class EditorApp:
                 else:
                     entry_lines = [f"    {key}: {static_rel}"]
             self._upsert_lmr_named_entry(section_name, key, entry_lines)
-            window.destroy()
+            self._close_lmr_dialog(window)
 
         cancel_y = visual_cfg["cancel_y"] if layout_key == "lmr_bg_cg_dialog" else (visual_cfg["cancel_y_animated"] if allow_animation else visual_cfg["cancel_y_static"])
         add_y = visual_cfg["add_y"] if layout_key == "lmr_bg_cg_dialog" else (visual_cfg["add_y_animated"] if allow_animation else visual_cfg["add_y_static"])
