@@ -659,6 +659,7 @@ DEFAULT_LAYOUT = {
         "platform_browse_x": 574,
         "platform_start_y": 92,
         "platform_step_y": 44,
+        "platform_browse_offset_y": 20,
         "platform_entry_width": 440,
         "platform_browse_width": 62,
         "cancel_x": 530,
@@ -4412,7 +4413,7 @@ class EditorApp:
             label = tk.Label(parent, text=platform, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
             y = cfg0["platform_start_y"] + index * cfg0["platform_step_y"]
             entry, shell = self._create_lmr_text_entry(window, platform_vars[platform], cfg0["platform_entry_x"], y + 22, cfg0["platform_entry_width"])
-            browse_button, _ = self._create_lmr_dialog_button(window, "Browse", cfg0["platform_browse_x"], y + 20, lambda p=platform: platform_vars[p].set(self._ask_directory(window, f"Select {p} directory", platform_vars[p].get().strip()) or platform_vars[p].get().strip()), middle_width=cfg0["platform_browse_width"])
+            browse_button, _ = self._create_lmr_dialog_button(window, "Browse", cfg0["platform_browse_x"], y + cfg0["platform_browse_offset_y"], lambda p=platform: platform_vars[p].set(self._ask_directory(window, f"Select {p} directory", platform_vars[p].get().strip()) or platform_vars[p].get().strip()), middle_width=cfg0["platform_browse_width"])
             platform_widgets.append((label, entry, shell, browse_button, y))
 
         def update_form(*_args):
@@ -4500,7 +4501,7 @@ class EditorApp:
                 label.place_configure(x=cfg["platform_label_x"], y=y)
                 shell.place_configure(x=cfg["platform_entry_x"], y=y, width=cfg["platform_entry_width"], height=24)
                 browse_button._lmr_button_x = cfg["platform_browse_x"]  # type: ignore[attr-defined]
-                browse_button._lmr_button_y = y + 20  # type: ignore[attr-defined]
+                browse_button._lmr_button_y = y + cfg["platform_browse_offset_y"]  # type: ignore[attr-defined]
                 browse_button._lmr_button_middle_width = cfg["platform_browse_width"]  # type: ignore[attr-defined]
                 browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["platform_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
