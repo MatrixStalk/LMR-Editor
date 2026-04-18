@@ -396,6 +396,12 @@ DEFAULT_LAYOUT = {
         "dropdown_cap_min_width": 24
     },
     "lmr_visual_dialog": {
+        "width": 760,
+        "height": 450,
+        "width_static": 760,
+        "height_static": 450,
+        "width_animated": 760,
+        "height_animated": 520,
         "technical_label_x": 20,
         "technical_label_y": 24,
         "technical_entry_x": 20,
@@ -446,6 +452,286 @@ DEFAULT_LAYOUT = {
         "add_y_static": 404,
         "add_y_animated": 474,
         "add_width": 72
+    },
+    "lmr_bg_cg_dialog": {
+        "width": 760,
+        "height": 520,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 240,
+        "asset_label_x": 20,
+        "asset_label_y": 84,
+        "asset_entry_x": 20,
+        "asset_entry_y": 106,
+        "asset_entry_width": 240,
+        "folder_label_x": 280,
+        "folder_label_y": 84,
+        "folder_entry_x": 280,
+        "folder_entry_y": 106,
+        "folder_entry_width": 100,
+        "source_type_label_x": 20,
+        "source_type_label_y": 144,
+        "source_type_x": 20,
+        "source_type_y": 166,
+        "source_type_width": 120,
+        "animated_x": 160,
+        "animated_y": 164,
+        "static_label_x": 20,
+        "static_label_y": 206,
+        "static_entry_x": 20,
+        "static_entry_y": 228,
+        "static_entry_width": 540,
+        "static_browse_x": 574,
+        "static_browse_y": 226,
+        "static_browse_width": 72,
+        "anim_label_x": 20,
+        "anim_label_y": 272,
+        "anim_entry_x": 20,
+        "anim_entry_y": 294,
+        "anim_entry_width": 540,
+        "anim_browse_x": 574,
+        "anim_browse_y": 292,
+        "anim_browse_width": 72,
+        "preview_x": 404,
+        "preview_y": 44,
+        "preview_width": 320,
+        "preview_height": 180,
+        "cancel_x": 560,
+        "cancel_y": 474,
+        "cancel_width": 72,
+        "add_x": 650,
+        "add_y": 474,
+        "add_width": 72
+    },
+    "lmr_sound_dialog": {
+        "width": 620,
+        "height": 260,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 260,
+        "asset_label_x": 20,
+        "asset_label_y": 84,
+        "asset_entry_x": 20,
+        "asset_entry_y": 106,
+        "asset_entry_width": 260,
+        "folder_label_x": 320,
+        "folder_label_y": 84,
+        "folder_entry_x": 320,
+        "folder_entry_y": 106,
+        "folder_entry_width": 180,
+        "file_label_x": 20,
+        "file_label_y": 144,
+        "file_entry_x": 20,
+        "file_entry_y": 166,
+        "file_entry_width": 480,
+        "browse_x": 514,
+        "browse_y": 164,
+        "browse_width": 72,
+        "cancel_x": 424,
+        "cancel_y": 218,
+        "cancel_width": 72,
+        "add_x": 514,
+        "add_y": 218,
+        "add_width": 72
+    },
+    "lmr_variable_dialog": {
+        "width": 620,
+        "height": 280,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 260,
+        "type_label_x": 320,
+        "type_label_y": 24,
+        "type_x": 320,
+        "type_y": 46,
+        "type_width": 140,
+        "value_label_x": 20,
+        "value_label_y": 84,
+        "value_entry_x": 20,
+        "value_entry_y": 106,
+        "value_entry_width": 574,
+        "cancel_x": 424,
+        "cancel_y": 238,
+        "cancel_width": 72,
+        "add_x": 514,
+        "add_y": 238,
+        "add_width": 72
+    },
+    "lmr_transition_dialog": {
+        "width": 640,
+        "height": 320,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 260,
+        "preset_label_x": 20,
+        "preset_label_y": 84,
+        "preset_x": 20,
+        "preset_y": 106,
+        "preset_width": 160,
+        "duration_label_x": 220,
+        "duration_label_y": 84,
+        "duration_x": 220,
+        "duration_y": 106,
+        "duration_width": 120,
+        "condition_label_x": 20,
+        "condition_label_y": 144,
+        "condition_x": 20,
+        "condition_y": 166,
+        "condition_width": 600,
+        "cancel_x": 470,
+        "cancel_y": 276,
+        "cancel_width": 62,
+        "add_x": 550,
+        "add_y": 276,
+        "add_width": 62
+    },
+    "lmr_entry_point_dialog": {
+        "width": 480,
+        "height": 180,
+        "scenario_label_x": 20,
+        "scenario_label_y": 24,
+        "scenario_x": 20,
+        "scenario_y": 46,
+        "scenario_width": 300,
+        "cancel_x": 294,
+        "cancel_y": 136,
+        "cancel_width": 72,
+        "add_x": 384,
+        "add_y": 136,
+        "add_width": 72
+    },
+    "lmr_backdrop_text_dialog": {
+        "width": 620,
+        "height": 290,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 260,
+        "locale_label_x": 320,
+        "locale_label_y": 24,
+        "locale_x": 320,
+        "locale_y": 46,
+        "locale_width": 120,
+        "text_label_x": 20,
+        "text_label_y": 84,
+        "text_entry_x": 20,
+        "text_entry_y": 106,
+        "text_entry_width": 574,
+        "cancel_x": 424,
+        "cancel_y": 248,
+        "cancel_width": 72,
+        "add_x": 514,
+        "add_y": 248,
+        "add_width": 72
+    },
+    "lmr_catalogs_dialog": {
+        "width": 700,
+        "height": 360,
+        "name_label_x": 20,
+        "name_label_y": 24,
+        "name_entry_x": 20,
+        "name_entry_y": 46,
+        "name_entry_width": 240,
+        "mode_label_x": 300,
+        "mode_label_y": 24,
+        "mode_x": 300,
+        "mode_y": 46,
+        "mode_width": 120,
+        "single_label_x": 20,
+        "single_label_y": 92,
+        "single_entry_x": 20,
+        "single_entry_y": 114,
+        "single_entry_width": 640,
+        "platform_label_x": 20,
+        "platform_entry_x": 120,
+        "platform_start_y": 92,
+        "platform_step_y": 44,
+        "platform_entry_width": 540,
+        "cancel_x": 530,
+        "cancel_y": 320,
+        "cancel_width": 62,
+        "add_x": 610,
+        "add_y": 320,
+        "add_width": 62
+    },
+    "lmr_color_dialog": {
+        "width": 520,
+        "height": 220,
+        "name_label_x": 20,
+        "name_label_y": 24,
+        "name_entry_x": 20,
+        "name_entry_y": 46,
+        "name_entry_width": 240,
+        "value_label_x": 20,
+        "value_label_y": 84,
+        "value_entry_x": 20,
+        "value_entry_y": 106,
+        "value_entry_width": 240,
+        "cancel_x": 344,
+        "cancel_y": 176,
+        "cancel_width": 62,
+        "add_x": 424,
+        "add_y": 176,
+        "add_width": 62
+    },
+    "lmr_language_pair_dialog": {
+        "width": 680,
+        "height": 300,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 280,
+        "ru_label_x": 20,
+        "ru_label_y": 84,
+        "ru_entry_x": 20,
+        "ru_entry_y": 106,
+        "ru_entry_width": 620,
+        "en_label_x": 20,
+        "en_label_y": 164,
+        "en_entry_x": 20,
+        "en_entry_y": 186,
+        "en_entry_width": 620,
+        "cancel_x": 490,
+        "cancel_y": 256,
+        "cancel_width": 62,
+        "add_x": 570,
+        "add_y": 256,
+        "add_width": 62
+    },
+    "lmr_xy_dialog": {
+        "width": 540,
+        "height": 260,
+        "technical_label_x": 20,
+        "technical_label_y": 24,
+        "technical_entry_x": 20,
+        "technical_entry_y": 46,
+        "technical_entry_width": 260,
+        "x_label_x": 20,
+        "x_label_y": 84,
+        "x_entry_x": 20,
+        "x_entry_y": 106,
+        "x_entry_width": 160,
+        "y_label_x": 220,
+        "y_label_y": 84,
+        "y_entry_x": 220,
+        "y_entry_y": 106,
+        "y_entry_width": 160,
+        "cancel_x": 364,
+        "cancel_y": 216,
+        "cancel_width": 62,
+        "add_x": 444,
+        "add_y": 216,
+        "add_width": 62
     }
 }
 
@@ -2579,13 +2865,51 @@ class EditorApp:
         visual_dialog = layout.get("lmr_visual_dialog", DEFAULT_LAYOUT["lmr_visual_dialog"])
         layout["lmr_visual_dialog"] = {}
         for key, default_value in DEFAULT_LAYOUT["lmr_visual_dialog"].items():
-            value = visual_dialog.get(key, default_value)
+            if key == "width_static":
+                value = visual_dialog.get("width", visual_dialog.get(key, default_value))
+            elif key == "height_static":
+                value = visual_dialog.get("height", visual_dialog.get(key, default_value))
+            else:
+                value = visual_dialog.get(key, default_value)
             if isinstance(default_value, float):
                 layout["lmr_visual_dialog"][key] = float(value)
             elif isinstance(default_value, int):
                 layout["lmr_visual_dialog"][key] = int(value)
             else:
                 layout["lmr_visual_dialog"][key] = value
+
+        bg_cg_dialog = layout.get("lmr_bg_cg_dialog", layout.get("lmr_visual_dialog", DEFAULT_LAYOUT["lmr_bg_cg_dialog"]))
+        layout["lmr_bg_cg_dialog"] = {}
+        for key, default_value in DEFAULT_LAYOUT["lmr_bg_cg_dialog"].items():
+            value = bg_cg_dialog.get(key, default_value)
+            if isinstance(default_value, float):
+                layout["lmr_bg_cg_dialog"][key] = float(value)
+            elif isinstance(default_value, int):
+                layout["lmr_bg_cg_dialog"][key] = int(value)
+            else:
+                layout["lmr_bg_cg_dialog"][key] = value
+
+        for section_name in (
+            "lmr_sound_dialog",
+            "lmr_variable_dialog",
+            "lmr_transition_dialog",
+            "lmr_entry_point_dialog",
+            "lmr_backdrop_text_dialog",
+            "lmr_catalogs_dialog",
+            "lmr_color_dialog",
+            "lmr_language_pair_dialog",
+            "lmr_xy_dialog",
+        ):
+            section = layout.get(section_name, DEFAULT_LAYOUT[section_name])
+            layout[section_name] = {}
+            for key, default_value in DEFAULT_LAYOUT[section_name].items():
+                value = section.get(key, default_value)
+                if isinstance(default_value, float):
+                    layout[section_name][key] = float(value)
+                elif isinstance(default_value, int):
+                    layout[section_name][key] = int(value)
+                else:
+                    layout[section_name][key] = value
 
         return layout
 
@@ -3471,7 +3795,8 @@ class EditorApp:
         if widget is not None:
             widget._lmr_button_x = x  # type: ignore[attr-defined]
             widget._lmr_button_y = y  # type: ignore[attr-defined]
-            widget._lmr_button_width = width  # type: ignore[attr-defined]
+            widget._lmr_button_middle_width = width  # type: ignore[attr-defined]
+            widget._lmr_button_width = self._compute_lmr_button_total_width(width, cfg["button_height"])  # type: ignore[attr-defined]
             widget._lmr_button_height = cfg["button_height"]  # type: ignore[attr-defined]
             widget._lmr_button_item = window_item  # type: ignore[attr-defined]
             buttons = getattr(window, "_lmr_dialog_buttons", None)
@@ -3481,6 +3806,15 @@ class EditorApp:
             if widget not in buttons:
                 buttons.append(widget)
         return widget, window_item
+
+    def _compute_lmr_button_total_width(self, middle_width: int, button_height: int):
+        left_idle = self.assets.get("button_border_left_idle.png")
+        right_idle = self.assets.get("button_border_right_idle.png")
+        if left_idle is None or right_idle is None:
+            return middle_width
+        left_width = max(1, int(round(left_idle.width() * (button_height / max(1, left_idle.height())))))
+        right_width = max(1, int(round(right_idle.width() * (button_height / max(1, right_idle.height())))))
+        return left_width + middle_width + right_width
 
     def _get_lmr_dialog_content(self, window):
         return getattr(window, "_dialog_content", window)
@@ -3755,6 +4089,17 @@ class EditorApp:
     def _draw_lmr_dialog_background(self, canvas, width, height):
         canvas.create_rectangle(0, 0, width, height, fill="#111111", outline="#2a2a2a", width=1)
 
+    def _get_lmr_dialog_target_size(self, window):
+        provider = getattr(window, "_lmr_size_provider", None)
+        if callable(provider):
+            try:
+                width, height = provider()
+                return int(width), int(height)
+            except Exception:
+                pass
+        cfg = self.layout["lmr_resource_manager_window"]
+        return int(getattr(window, "_dialog_width", cfg["width"])), int(getattr(window, "_dialog_height", cfg["height"]))
+
     def _watch_lmr_dialog_layout(self, window):
         if not window.winfo_exists():
             return
@@ -3764,8 +4109,11 @@ class EditorApp:
             window._layout_mtime = current_mtime
             self.layout = self._sanitize_layout(load_json(LAYOUT_PATH, DEFAULT_LAYOUT))
             cfg = self.layout["lmr_resource_manager_window"]
-            width = max(320, int(getattr(window, "_dialog_width", cfg["width"])))
-            height = max(240, int(getattr(window, "_dialog_height", cfg["height"])))
+            target_width, target_height = self._get_lmr_dialog_target_size(window)
+            width = max(320, int(target_width))
+            height = max(240, int(target_height))
+            window._dialog_width = width  # type: ignore[attr-defined]
+            window._dialog_height = height  # type: ignore[attr-defined]
             window.geometry(f"{width}x{height}+{window.winfo_x()}+{window.winfo_y()}")
             canvas = getattr(window, "_dialog_canvas", None)
             if canvas is not None:
@@ -3795,8 +4143,8 @@ class EditorApp:
 
     def _open_lmr_basic_dialog(self, title: str, width: int = 640, height: int = 420):
         cfg = self.layout["lmr_resource_manager_window"]
-        width = max(width, cfg["width"])
-        height = max(height, cfg["height"])
+        width = int(width if width is not None else cfg["width"])
+        height = int(height if height is not None else cfg["height"])
         window = tk.Toplevel(self.root)
         window.transient(self.root)
         window.configure(bg="#111111")
@@ -3861,24 +4209,26 @@ class EditorApp:
     def add_lmr_sound(self):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog("Add sound", width=620, height=260)
+        sound_cfg = self.layout["lmr_sound_dialog"]
+        window = self._open_lmr_basic_dialog("Add sound", width=sound_cfg["width"], height=sound_cfg["height"])
         labels = [
-            ("Technical Name", 20, 24),
-            ("Asset Name", 20, 84),
-            ("Folder", 320, 84),
-            ("Source File", 20, 144),
+            ("Technical Name", sound_cfg["technical_label_x"], sound_cfg["technical_label_y"]),
+            ("Asset Name", sound_cfg["asset_label_x"], sound_cfg["asset_label_y"]),
+            ("Folder", sound_cfg["folder_label_x"], sound_cfg["folder_label_y"]),
+            ("Source File", sound_cfg["file_label_x"], sound_cfg["file_label_y"]),
         ]
+        label_widgets = []
         for text, x, y in labels:
-            self._create_lmr_text_label(window, text, x, y)
+            label_widgets.append(self._create_lmr_text_label(window, text, x, y))
         technical_var = tk.StringVar()
         asset_name_var = tk.StringVar()
         folder_var = tk.StringVar(value="sound")
         file_var = tk.StringVar()
-        self._create_lmr_text_entry(window, technical_var, 20, 46, 260)
-        self._create_lmr_text_entry(window, asset_name_var, 20, 106, 260)
-        self._create_lmr_text_entry(window, folder_var, 320, 106, 180)
-        self._create_lmr_text_entry(window, file_var, 20, 166, 480)
-        self._create_lmr_dialog_button(window, "Browse", 514, 164, lambda: file_var.set(self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")])), middle_width=72)
+        technical_entry, _ = self._create_lmr_text_entry(window, technical_var, sound_cfg["technical_entry_x"], sound_cfg["technical_entry_y"], sound_cfg["technical_entry_width"])
+        asset_entry, _ = self._create_lmr_text_entry(window, asset_name_var, sound_cfg["asset_entry_x"], sound_cfg["asset_entry_y"], sound_cfg["asset_entry_width"])
+        folder_entry, _ = self._create_lmr_text_entry(window, folder_var, sound_cfg["folder_entry_x"], sound_cfg["folder_entry_y"], sound_cfg["folder_entry_width"])
+        file_entry, _ = self._create_lmr_text_entry(window, file_var, sound_cfg["file_entry_x"], sound_cfg["file_entry_y"], sound_cfg["file_entry_width"])
+        browse_button, _ = self._create_lmr_dialog_button(window, "Browse", sound_cfg["browse_x"], sound_cfg["browse_y"], lambda: file_var.set(self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")])), middle_width=sound_cfg["browse_width"])
 
         def submit():
             source = Path(file_var.get().strip())
@@ -3893,24 +4243,43 @@ class EditorApp:
             self._upsert_lmr_named_entry("sound", key, [f"    {key}: {rel_path}"])
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 424, 218, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
-        self._create_lmr_dialog_button(window, "Add", 514, 218, submit, middle_width=72)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", sound_cfg["cancel_x"], sound_cfg["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=sound_cfg["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", sound_cfg["add_x"], sound_cfg["add_y"], submit, middle_width=sound_cfg["add_width"])
+        def refresh_sound_layout():
+            cfg = self.layout["lmr_sound_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
+            asset_entry.place_configure(x=cfg["asset_entry_x"], y=cfg["asset_entry_y"], width=cfg["asset_entry_width"])
+            folder_entry.place_configure(x=cfg["folder_entry_x"], y=cfg["folder_entry_y"], width=cfg["folder_entry_width"])
+            file_entry.place_configure(x=cfg["file_entry_x"], y=cfg["file_entry_y"], width=cfg["file_entry_width"])
+            for button, prefix in ((browse_button, "browse"), (cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+            for label_widget, prefix in zip(label_widgets, ("technical_label", "asset_label", "folder_label", "file_label")):
+                label_widget.place_configure(x=cfg[f"{prefix}_x"], y=cfg[f"{prefix}_y"])
+        window._lmr_size_provider = lambda: (self.layout["lmr_sound_dialog"]["width"], self.layout["lmr_sound_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_sound_layout  # type: ignore[attr-defined]
+        refresh_sound_layout()
         window.grab_set()
         window.focus_force()
 
     def add_lmr_backdrop_text(self):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog("Add backdrop_text", width=620, height=290)
-        self._create_lmr_text_label(window, "Technical Name", 20, 24)
-        self._create_lmr_text_label(window, "Locale", 320, 24)
-        self._create_lmr_text_label(window, "Text", 20, 84)
+        cfg0 = self.layout["lmr_backdrop_text_dialog"]
+        window = self._open_lmr_basic_dialog("Add backdrop_text", width=cfg0["width"], height=cfg0["height"])
+        technical_label = self._create_lmr_text_label(window, "Technical Name", cfg0["technical_label_x"], cfg0["technical_label_y"])
+        locale_label = self._create_lmr_text_label(window, "Locale", cfg0["locale_label_x"], cfg0["locale_label_y"])
+        text_label = self._create_lmr_text_label(window, "Text", cfg0["text_label_x"], cfg0["text_label_y"])
         technical_var = tk.StringVar()
         locale_var = tk.StringVar(value="ru")
         text_var = tk.StringVar()
-        self._create_lmr_text_entry(window, technical_var, 20, 46, 260)
-        self._create_lmr_combobox(window, locale_var, ["ru", "en", "ja", "zh"], 320, 46, 120)
-        self._create_lmr_text_entry(window, text_var, 20, 106, 574)
+        technical_entry, _ = self._create_lmr_text_entry(window, technical_var, cfg0["technical_entry_x"], cfg0["technical_entry_y"], cfg0["technical_entry_width"])
+        locale_shell, _ = self._create_lmr_combobox(window, locale_var, ["ru", "en", "ja", "zh"], cfg0["locale_x"], cfg0["locale_y"], cfg0["locale_width"])
+        text_entry, _ = self._create_lmr_text_entry(window, text_var, cfg0["text_entry_x"], cfg0["text_entry_y"], cfg0["text_entry_width"])
 
         def submit():
             key = self._slugify_project_id(technical_var.get().strip())
@@ -3928,24 +4297,43 @@ class EditorApp:
             self._upsert_lmr_named_entry("backdrop_text", key, entry_lines)
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 424, 248, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
-        self._create_lmr_dialog_button(window, "Add", 514, 248, submit, middle_width=72)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_backdrop_text_layout():
+            cfg = self.layout["lmr_backdrop_text_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
+            locale_label.place_configure(x=cfg["locale_label_x"], y=cfg["locale_label_y"])
+            text_label.place_configure(x=cfg["text_label_x"], y=cfg["text_label_y"])
+            technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
+            locale_shell.place_configure(x=cfg["locale_x"], y=cfg["locale_y"], width=cfg["locale_width"], height=24)
+            text_entry.place_configure(x=cfg["text_entry_x"], y=cfg["text_entry_y"], width=cfg["text_entry_width"])
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_backdrop_text_dialog"]["width"], self.layout["lmr_backdrop_text_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_backdrop_text_layout  # type: ignore[attr-defined]
+        refresh_backdrop_text_layout()
         window.grab_set()
         window.focus_force()
 
     def add_lmr_variable(self):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog("Add variable", width=620, height=280)
-        self._create_lmr_text_label(window, "Technical Name", 20, 24)
-        self._create_lmr_text_label(window, "Value Type", 320, 24)
-        self._create_lmr_text_label(window, "Value", 20, 84)
+        cfg0 = self.layout["lmr_variable_dialog"]
+        window = self._open_lmr_basic_dialog("Add variable", width=cfg0["width"], height=cfg0["height"])
+        technical_label = self._create_lmr_text_label(window, "Technical Name", cfg0["technical_label_x"], cfg0["technical_label_y"])
+        type_label = self._create_lmr_text_label(window, "Value Type", cfg0["type_label_x"], cfg0["type_label_y"])
+        value_label = self._create_lmr_text_label(window, "Value", cfg0["value_label_x"], cfg0["value_label_y"])
         technical_var = tk.StringVar()
         value_type_var = tk.StringVar(value="number")
         value_var = tk.StringVar(value="0")
-        self._create_lmr_text_entry(window, technical_var, 20, 46, 260)
-        self._create_lmr_combobox(window, value_type_var, ["number", "text", "boolean", "expression"], 320, 46, 140)
-        self._create_lmr_text_entry(window, value_var, 20, 106, 574)
+        technical_entry, _ = self._create_lmr_text_entry(window, technical_var, cfg0["technical_entry_x"], cfg0["technical_entry_y"], cfg0["technical_entry_width"])
+        type_shell, _ = self._create_lmr_combobox(window, value_type_var, ["number", "text", "boolean", "expression"], cfg0["type_x"], cfg0["type_y"], cfg0["type_width"])
+        value_entry, _ = self._create_lmr_text_entry(window, value_var, cfg0["value_entry_x"], cfg0["value_entry_y"], cfg0["value_entry_width"])
 
         def submit():
             key = self._slugify_project_id(technical_var.get().strip())
@@ -3962,39 +4350,58 @@ class EditorApp:
             self._upsert_lmr_named_entry("variables", key, [f"    {key}: {rendered}"])
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 424, 238, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
-        self._create_lmr_dialog_button(window, "Add", 514, 238, submit, middle_width=72)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_variable_layout():
+            cfg = self.layout["lmr_variable_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
+            type_label.place_configure(x=cfg["type_label_x"], y=cfg["type_label_y"])
+            value_label.place_configure(x=cfg["value_label_x"], y=cfg["value_label_y"])
+            technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
+            type_shell.place_configure(x=cfg["type_x"], y=cfg["type_y"], width=cfg["type_width"], height=24)
+            value_entry.place_configure(x=cfg["value_entry_x"], y=cfg["value_entry_y"], width=cfg["value_entry_width"])
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_variable_dialog"]["width"], self.layout["lmr_variable_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_variable_layout  # type: ignore[attr-defined]
+        refresh_variable_layout()
         window.grab_set()
         window.focus_force()
 
     def add_lmr_catalogs(self):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog("Add catalogs", width=700, height=360)
-        self._create_lmr_text_label(window, "Catalog Name", 20, 24)
-        self._create_lmr_text_label(window, "Mode", 300, 24)
+        cfg0 = self.layout["lmr_catalogs_dialog"]
+        window = self._open_lmr_basic_dialog("Add catalogs", width=cfg0["width"], height=cfg0["height"])
+        name_label = self._create_lmr_text_label(window, "Catalog Name", cfg0["name_label_x"], cfg0["name_label_y"])
+        mode_label = self._create_lmr_text_label(window, "Mode", cfg0["mode_label_x"], cfg0["mode_label_y"])
         name_var = tk.StringVar(value="bundle")
         mode_var = tk.StringVar(value="single")
         path_var = tk.StringVar(value="catalogs/bundle/catalog.json")
         platform_vars = {platform: tk.StringVar() for platform in ("windows", "linux", "macos", "android", "ios")}
-        self._create_lmr_text_entry(window, name_var, 20, 46, 240)
-        self._create_lmr_combobox(window, mode_var, ["single", "platforms"], 300, 46, 120)
+        name_entry, _ = self._create_lmr_text_entry(window, name_var, cfg0["name_entry_x"], cfg0["name_entry_y"], cfg0["name_entry_width"])
+        mode_shell, _ = self._create_lmr_combobox(window, mode_var, ["single", "platforms"], cfg0["mode_x"], cfg0["mode_y"], cfg0["mode_width"])
         parent = self._get_lmr_dialog_content(window)
         single_label = tk.Label(parent, text="Catalog Path", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
-        single_entry, single_shell = self._create_lmr_text_entry(window, path_var, 20, 114, 640)
-        single_label.place(x=20, y=92)
+        single_entry, single_shell = self._create_lmr_text_entry(window, path_var, cfg0["single_entry_x"], cfg0["single_entry_y"], cfg0["single_entry_width"])
+        single_label.place(x=cfg0["single_label_x"], y=cfg0["single_label_y"])
         platform_widgets = []
-        start_y = 92
         for index, platform in enumerate(("windows", "linux", "macos", "android", "ios")):
             label = tk.Label(parent, text=platform, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
-            entry, shell = self._create_lmr_text_entry(window, platform_vars[platform], 120, start_y + index * 44 + 22, 540)
-            platform_widgets.append((label, entry, shell, start_y + index * 44))
+            y = cfg0["platform_start_y"] + index * cfg0["platform_step_y"]
+            entry, shell = self._create_lmr_text_entry(window, platform_vars[platform], cfg0["platform_entry_x"], y + 22, cfg0["platform_entry_width"])
+            platform_widgets.append((label, entry, shell, y))
 
         def update_form(*_args):
             is_single = mode_var.get() == "single"
             if is_single:
-                single_label.place(x=20, y=92)
-                single_shell.place(x=20, y=114, width=640, height=24)
+                single_label.place(x=cfg0["single_label_x"], y=cfg0["single_label_y"])
+                single_shell.place(x=cfg0["single_entry_x"], y=cfg0["single_entry_y"], width=cfg0["single_entry_width"], height=24)
             else:
                 single_label.place_forget()
                 single_shell.place_forget()
@@ -4003,8 +4410,8 @@ class EditorApp:
                     label.place_forget()
                     shell.place_forget()
                 else:
-                    label.place(x=20, y=y)
-                    shell.place(x=120, y=y, width=540, height=24)
+                    label.place(x=cfg0["platform_label_x"], y=y)
+                    shell.place(x=cfg0["platform_entry_x"], y=y, width=cfg0["platform_entry_width"], height=24)
 
         mode_var.trace_add("write", update_form)
 
@@ -4034,8 +4441,31 @@ class EditorApp:
             self._upsert_lmr_named_entry("catalogs", key, entry_lines)
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 530, 320, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
-        self._create_lmr_dialog_button(window, "Add", 610, 320, submit, middle_width=62)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_catalogs_layout():
+            cfg = self.layout["lmr_catalogs_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            name_label.place_configure(x=cfg["name_label_x"], y=cfg["name_label_y"])
+            mode_label.place_configure(x=cfg["mode_label_x"], y=cfg["mode_label_y"])
+            name_entry.place_configure(x=cfg["name_entry_x"], y=cfg["name_entry_y"], width=cfg["name_entry_width"])
+            mode_shell.place_configure(x=cfg["mode_x"], y=cfg["mode_y"], width=cfg["mode_width"], height=24)
+            single_label.place_configure(x=cfg["single_label_x"], y=cfg["single_label_y"])
+            single_shell.place_configure(x=cfg["single_entry_x"], y=cfg["single_entry_y"], width=cfg["single_entry_width"], height=24)
+            for index, (label, entry, shell, _y) in enumerate(platform_widgets):
+                y = cfg["platform_start_y"] + index * cfg["platform_step_y"]
+                label.place_configure(x=cfg["platform_label_x"], y=y)
+                shell.place_configure(x=cfg["platform_entry_x"], y=y, width=cfg["platform_entry_width"], height=24)
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+            update_form()
+        window._lmr_size_provider = lambda: (self.layout["lmr_catalogs_dialog"]["width"], self.layout["lmr_catalogs_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_catalogs_layout  # type: ignore[attr-defined]
+        refresh_catalogs_layout()
         update_form()
         window.grab_set()
         window.focus_force()
@@ -4049,13 +4479,14 @@ class EditorApp:
     def _open_lmr_color_value_dialog(self, section_name: str, title: str, label_name: str):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog(title, width=520, height=220)
-        self._create_lmr_text_label(window, label_name, 20, 24)
-        self._create_lmr_text_label(window, "Color Value", 20, 84)
+        cfg0 = self.layout["lmr_color_dialog"]
+        window = self._open_lmr_basic_dialog(title, width=cfg0["width"], height=cfg0["height"])
+        name_label = self._create_lmr_text_label(window, label_name, cfg0["name_label_x"], cfg0["name_label_y"])
+        value_label = self._create_lmr_text_label(window, "Color Value", cfg0["value_label_x"], cfg0["value_label_y"])
         name_var = tk.StringVar()
         value_var = tk.StringVar(value="#56F4EE")
-        self._create_lmr_text_entry(window, name_var, 20, 46, 240)
-        self._create_lmr_text_entry(window, value_var, 20, 106, 240)
+        name_entry, _ = self._create_lmr_text_entry(window, name_var, cfg0["name_entry_x"], cfg0["name_entry_y"], cfg0["name_entry_width"])
+        value_entry, _ = self._create_lmr_text_entry(window, value_var, cfg0["value_entry_x"], cfg0["value_entry_y"], cfg0["value_entry_width"])
 
         def submit():
             key = self._slugify_project_id(name_var.get().strip())
@@ -4069,8 +4500,24 @@ class EditorApp:
             self._upsert_lmr_named_entry(section_name, key, [f"    {key}: {json.dumps(value, ensure_ascii=False)}"])
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 344, 176, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
-        self._create_lmr_dialog_button(window, "Add", 424, 176, submit, middle_width=62)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_color_layout():
+            cfg = self.layout["lmr_color_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            name_label.place_configure(x=cfg["name_label_x"], y=cfg["name_label_y"])
+            value_label.place_configure(x=cfg["value_label_x"], y=cfg["value_label_y"])
+            name_entry.place_configure(x=cfg["name_entry_x"], y=cfg["name_entry_y"], width=cfg["name_entry_width"])
+            value_entry.place_configure(x=cfg["value_entry_x"], y=cfg["value_entry_y"], width=cfg["value_entry_width"])
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_color_dialog"]["width"], self.layout["lmr_color_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_color_layout  # type: ignore[attr-defined]
+        refresh_color_layout()
         window.grab_set()
         window.focus_force()
 
@@ -4083,16 +4530,17 @@ class EditorApp:
     def _open_lmr_language_pair_dialog(self, section_name: str, title: str, default_key: str = ""):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog(title, width=680, height=300)
-        self._create_lmr_text_label(window, "Technical Name", 20, 24)
-        self._create_lmr_text_label(window, "RU Text", 20, 84)
-        self._create_lmr_text_label(window, "EN Text", 20, 164)
+        cfg0 = self.layout["lmr_language_pair_dialog"]
+        window = self._open_lmr_basic_dialog(title, width=cfg0["width"], height=cfg0["height"])
+        technical_label = self._create_lmr_text_label(window, "Technical Name", cfg0["technical_label_x"], cfg0["technical_label_y"])
+        ru_label = self._create_lmr_text_label(window, "RU Text", cfg0["ru_label_x"], cfg0["ru_label_y"])
+        en_label = self._create_lmr_text_label(window, "EN Text", cfg0["en_label_x"], cfg0["en_label_y"])
         key_var = tk.StringVar(value=default_key)
         ru_var = tk.StringVar()
         en_var = tk.StringVar()
-        self._create_lmr_text_entry(window, key_var, 20, 46, 280)
-        self._create_lmr_text_entry(window, ru_var, 20, 106, 620)
-        self._create_lmr_text_entry(window, en_var, 20, 186, 620)
+        key_entry, _ = self._create_lmr_text_entry(window, key_var, cfg0["technical_entry_x"], cfg0["technical_entry_y"], cfg0["technical_entry_width"])
+        ru_entry, _ = self._create_lmr_text_entry(window, ru_var, cfg0["ru_entry_x"], cfg0["ru_entry_y"], cfg0["ru_entry_width"])
+        en_entry, _ = self._create_lmr_text_entry(window, en_var, cfg0["en_entry_x"], cfg0["en_entry_y"], cfg0["en_entry_width"])
 
         def submit():
             key = self._slugify_project_id(key_var.get().strip())
@@ -4110,8 +4558,26 @@ class EditorApp:
             self._upsert_lmr_named_entry(section_name, key, entry_lines)
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 490, 256, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
-        self._create_lmr_dialog_button(window, "Add", 570, 256, submit, middle_width=62)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_language_layout():
+            cfg = self.layout["lmr_language_pair_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
+            ru_label.place_configure(x=cfg["ru_label_x"], y=cfg["ru_label_y"])
+            en_label.place_configure(x=cfg["en_label_x"], y=cfg["en_label_y"])
+            key_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
+            ru_entry.place_configure(x=cfg["ru_entry_x"], y=cfg["ru_entry_y"], width=cfg["ru_entry_width"])
+            en_entry.place_configure(x=cfg["en_entry_x"], y=cfg["en_entry_y"], width=cfg["en_entry_width"])
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_language_pair_dialog"]["width"], self.layout["lmr_language_pair_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_language_layout  # type: ignore[attr-defined]
+        refresh_language_layout()
         window.grab_set()
         window.focus_force()
 
@@ -4124,16 +4590,17 @@ class EditorApp:
     def _open_lmr_xy_dialog(self, section_name: str, title: str, labels=("X", "Y"), defaults=("0", "0")):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog(title, width=540, height=260)
-        self._create_lmr_text_label(window, "Technical Name", 20, 24)
-        self._create_lmr_text_label(window, labels[0], 20, 84)
-        self._create_lmr_text_label(window, labels[1], 220, 84)
+        cfg0 = self.layout["lmr_xy_dialog"]
+        window = self._open_lmr_basic_dialog(title, width=cfg0["width"], height=cfg0["height"])
+        technical_label = self._create_lmr_text_label(window, "Technical Name", cfg0["technical_label_x"], cfg0["technical_label_y"])
+        x_label = self._create_lmr_text_label(window, labels[0], cfg0["x_label_x"], cfg0["x_label_y"])
+        y_label = self._create_lmr_text_label(window, labels[1], cfg0["y_label_x"], cfg0["y_label_y"])
         key_var = tk.StringVar()
         x_var = tk.StringVar(value=defaults[0])
         y_var = tk.StringVar(value=defaults[1])
-        self._create_lmr_text_entry(window, key_var, 20, 46, 260)
-        self._create_lmr_text_entry(window, x_var, 20, 106, 160)
-        self._create_lmr_text_entry(window, y_var, 220, 106, 160)
+        key_entry, _ = self._create_lmr_text_entry(window, key_var, cfg0["technical_entry_x"], cfg0["technical_entry_y"], cfg0["technical_entry_width"])
+        x_entry, _ = self._create_lmr_text_entry(window, x_var, cfg0["x_entry_x"], cfg0["x_entry_y"], cfg0["x_entry_width"])
+        y_entry, _ = self._create_lmr_text_entry(window, y_var, cfg0["y_entry_x"], cfg0["y_entry_y"], cfg0["y_entry_width"])
 
         def submit():
             key = self._slugify_project_id(key_var.get().strip())
@@ -4147,27 +4614,46 @@ class EditorApp:
             ])
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 364, 216, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
-        self._create_lmr_dialog_button(window, "Add", 444, 216, submit, middle_width=62)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_xy_layout():
+            cfg = self.layout["lmr_xy_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
+            x_label.place_configure(x=cfg["x_label_x"], y=cfg["x_label_y"])
+            y_label.place_configure(x=cfg["y_label_x"], y=cfg["y_label_y"])
+            key_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
+            x_entry.place_configure(x=cfg["x_entry_x"], y=cfg["x_entry_y"], width=cfg["x_entry_width"])
+            y_entry.place_configure(x=cfg["y_entry_x"], y=cfg["y_entry_y"], width=cfg["y_entry_width"])
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_xy_dialog"]["width"], self.layout["lmr_xy_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_xy_layout  # type: ignore[attr-defined]
+        refresh_xy_layout()
         window.grab_set()
         window.focus_force()
 
     def add_lmr_transition(self):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog("Add transition", width=640, height=320)
-        self._create_lmr_text_label(window, "Technical Name", 20, 24)
-        self._create_lmr_text_label(window, "Preset", 20, 84)
-        self._create_lmr_text_label(window, "Duration", 220, 84)
-        self._create_lmr_text_label(window, "Condition", 20, 144)
+        cfg0 = self.layout["lmr_transition_dialog"]
+        window = self._open_lmr_basic_dialog("Add transition", width=cfg0["width"], height=cfg0["height"])
+        technical_label = self._create_lmr_text_label(window, "Technical Name", cfg0["technical_label_x"], cfg0["technical_label_y"])
+        preset_label = self._create_lmr_text_label(window, "Preset", cfg0["preset_label_x"], cfg0["preset_label_y"])
+        duration_label = self._create_lmr_text_label(window, "Duration", cfg0["duration_label_x"], cfg0["duration_label_y"])
+        condition_label = self._create_lmr_text_label(window, "Condition", cfg0["condition_label_x"], cfg0["condition_label_y"])
         key_var = tk.StringVar()
         preset_var = tk.StringVar(value="flash")
         duration_var = tk.StringVar(value="0.2")
         condition_var = tk.StringVar()
-        self._create_lmr_text_entry(window, key_var, 20, 46, 260)
-        self._create_lmr_combobox(window, preset_var, ["flash", "dissolve", "dissolve2", "fade", "wipeleft", "wiperight"], 20, 106, 160)
-        self._create_lmr_text_entry(window, duration_var, 220, 106, 120)
-        self._create_lmr_text_entry(window, condition_var, 20, 166, 600)
+        key_entry, _ = self._create_lmr_text_entry(window, key_var, cfg0["technical_entry_x"], cfg0["technical_entry_y"], cfg0["technical_entry_width"])
+        preset_shell, _ = self._create_lmr_combobox(window, preset_var, ["flash", "dissolve", "dissolve2", "fade", "wipeleft", "wiperight"], cfg0["preset_x"], cfg0["preset_y"], cfg0["preset_width"])
+        duration_entry, _ = self._create_lmr_text_entry(window, duration_var, cfg0["duration_x"], cfg0["duration_y"], cfg0["duration_width"])
+        condition_entry, _ = self._create_lmr_text_entry(window, condition_var, cfg0["condition_x"], cfg0["condition_y"], cfg0["condition_width"])
 
         def submit():
             key = self._slugify_project_id(key_var.get().strip())
@@ -4184,8 +4670,28 @@ class EditorApp:
             self._upsert_lmr_named_entry("transitions", key, entry_lines)
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 470, 276, lambda w=window: self._close_lmr_dialog(w), middle_width=62)
-        self._create_lmr_dialog_button(window, "Add", 550, 276, submit, middle_width=62)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_transition_layout():
+            cfg = self.layout["lmr_transition_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
+            preset_label.place_configure(x=cfg["preset_label_x"], y=cfg["preset_label_y"])
+            duration_label.place_configure(x=cfg["duration_label_x"], y=cfg["duration_label_y"])
+            condition_label.place_configure(x=cfg["condition_label_x"], y=cfg["condition_label_y"])
+            key_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
+            preset_shell.place_configure(x=cfg["preset_x"], y=cfg["preset_y"], width=cfg["preset_width"], height=24)
+            duration_entry.place_configure(x=cfg["duration_x"], y=cfg["duration_y"], width=cfg["duration_width"])
+            condition_entry.place_configure(x=cfg["condition_x"], y=cfg["condition_y"], width=cfg["condition_width"])
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_transition_dialog"]["width"], self.layout["lmr_transition_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_transition_layout  # type: ignore[attr-defined]
+        refresh_transition_layout()
         window.grab_set()
         window.focus_force()
 
@@ -4196,10 +4702,11 @@ class EditorApp:
         if not scenario_ids:
             messagebox.showwarning("entryPoint", "No scenario technical names were found in resources.yaml.", parent=self.root)
             return
-        window = self._open_lmr_basic_dialog("Add entryPoint", width=480, height=180)
-        self._create_lmr_text_label(window, "Scenario ID", 20, 24)
+        cfg0 = self.layout["lmr_entry_point_dialog"]
+        window = self._open_lmr_basic_dialog("Add entryPoint", width=cfg0["width"], height=cfg0["height"])
+        scenario_label = self._create_lmr_text_label(window, "Scenario ID", cfg0["scenario_label_x"], cfg0["scenario_label_y"])
         scenario_var = tk.StringVar(value=scenario_ids[0])
-        self._create_lmr_combobox(window, scenario_var, scenario_ids, 20, 46, 300)
+        scenario_shell, _ = self._create_lmr_combobox(window, scenario_var, scenario_ids, cfg0["scenario_x"], cfg0["scenario_y"], cfg0["scenario_width"])
 
         def submit():
             value = scenario_var.get().strip()
@@ -4209,15 +4716,28 @@ class EditorApp:
             self._upsert_lmr_top_level_scalar("entryPoint", value)
             window.destroy()
 
-        self._create_lmr_dialog_button(window, "Cancel", 294, 136, lambda w=window: self._close_lmr_dialog(w), middle_width=72)
-        self._create_lmr_dialog_button(window, "Add", 384, 136, submit, middle_width=72)
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", cfg0["cancel_x"], cfg0["cancel_y"], lambda w=window: self._close_lmr_dialog(w), middle_width=cfg0["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
+        def refresh_entry_layout():
+            cfg = self.layout["lmr_entry_point_dialog"]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            scenario_label.place_configure(x=cfg["scenario_label_x"], y=cfg["scenario_label_y"])
+            scenario_shell.place_configure(x=cfg["scenario_x"], y=cfg["scenario_y"], width=cfg["scenario_width"], height=24)
+            for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
+                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
+                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_entry_point_dialog"]["width"], self.layout["lmr_entry_point_dialog"]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_entry_layout  # type: ignore[attr-defined]
+        refresh_entry_layout()
         window.grab_set()
         window.focus_force()
 
     def _open_lmr_visual_resource_dialog(self, section_name: str, title: str, allow_animation: bool, allow_prefab: bool):
         if self._detect_project_type() != "lmr":
             return
-        window = self._open_lmr_basic_dialog(title, width=760, height=520 if allow_animation else 450)
         tech_var = tk.StringVar()
         asset_name_var = tk.StringVar()
         folder_var = tk.StringVar(value=section_name)
@@ -4226,7 +4746,9 @@ class EditorApp:
         static_var = tk.StringVar()
         anim_var = tk.StringVar()
 
-        visual_cfg = self.layout["lmr_visual_dialog"]
+        layout_key = "lmr_bg_cg_dialog" if section_name in {"bg", "cg"} else "lmr_visual_dialog"
+        visual_cfg = self.layout[layout_key]
+        window = self._open_lmr_basic_dialog(title, width=visual_cfg["width"], height=visual_cfg["height"])
         preview_shell = self._create_lmr_text_preview(window, visual_cfg["preview_x"], visual_cfg["preview_y"], visual_cfg["preview_width"], visual_cfg["preview_height"])
         preview_label = tk.Label(preview_shell, text="Preview unavailable", bg="#151515", fg="#8d9895")
         preview_window_item = preview_shell.create_window(visual_cfg["preview_width"] // 2, visual_cfg["preview_height"] // 2, anchor="center", window=preview_label, width=visual_cfg["preview_width"] - 16, height=visual_cfg["preview_height"] - 16)
@@ -4320,11 +4842,15 @@ class EditorApp:
             self._upsert_lmr_named_entry(section_name, key, entry_lines)
             window.destroy()
 
-        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", visual_cfg["cancel_x"], (visual_cfg["cancel_y_animated"] if allow_animation else visual_cfg["cancel_y_static"]), lambda w=window: self._close_lmr_dialog(w), middle_width=visual_cfg["cancel_width"])
-        add_button, _ = self._create_lmr_dialog_button(window, "Add", visual_cfg["add_x"], (visual_cfg["add_y_animated"] if allow_animation else visual_cfg["add_y_static"]), submit, middle_width=visual_cfg["add_width"])
+        cancel_y = visual_cfg["cancel_y"] if layout_key == "lmr_bg_cg_dialog" else (visual_cfg["cancel_y_animated"] if allow_animation else visual_cfg["cancel_y_static"])
+        add_y = visual_cfg["add_y"] if layout_key == "lmr_bg_cg_dialog" else (visual_cfg["add_y_animated"] if allow_animation else visual_cfg["add_y_static"])
+        cancel_button, _ = self._create_lmr_dialog_button(window, "Cancel", visual_cfg["cancel_x"], cancel_y, lambda w=window: self._close_lmr_dialog(w), middle_width=visual_cfg["cancel_width"])
+        add_button, _ = self._create_lmr_dialog_button(window, "Add", visual_cfg["add_x"], add_y, submit, middle_width=visual_cfg["add_width"])
 
         def refresh_visual_layout():
-            cfg = self.layout["lmr_visual_dialog"]
+            cfg = self.layout[layout_key]
+            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
+            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"], height=24)
             asset_label.place_configure(x=cfg["asset_label_x"], y=cfg["asset_label_y"])
@@ -4348,7 +4874,8 @@ class EditorApp:
                 anim_widgets[2].place_configure(x=cfg["anim_entry_x"], y=cfg["anim_entry_y"], width=cfg["anim_entry_width"], height=24)
                 anim_button_widget._lmr_button_x = cfg["anim_browse_x"]  # type: ignore[attr-defined]
                 anim_button_widget._lmr_button_y = cfg["anim_browse_y"]  # type: ignore[attr-defined]
-                anim_button_widget._lmr_button_width = cfg["anim_browse_width"]  # type: ignore[attr-defined]
+                anim_button_widget._lmr_button_middle_width = cfg["anim_browse_width"]  # type: ignore[attr-defined]
+                anim_button_widget._lmr_button_width = self._compute_lmr_button_total_width(cfg["anim_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
                 anim_button_item_current = getattr(anim_button_widget, "_lmr_button_item", None)
                 if anim_button_item_current is not None:
                     canvas = getattr(window, "_dialog_canvas", None)
@@ -4357,13 +4884,16 @@ class EditorApp:
                         canvas.itemconfigure(anim_button_item_current, width=cfg["anim_browse_width"], height=self.layout["lmr_resource_manager_window"]["button_height"])
             static_browse_widget._lmr_button_x = cfg["static_browse_x"]  # type: ignore[attr-defined]
             static_browse_widget._lmr_button_y = cfg["static_browse_y"]  # type: ignore[attr-defined]
-            static_browse_widget._lmr_button_width = cfg["static_browse_width"]  # type: ignore[attr-defined]
+            static_browse_widget._lmr_button_middle_width = cfg["static_browse_width"]  # type: ignore[attr-defined]
+            static_browse_widget._lmr_button_width = self._compute_lmr_button_total_width(cfg["static_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
             cancel_button._lmr_button_x = cfg["cancel_x"]  # type: ignore[attr-defined]
-            cancel_button._lmr_button_y = (cfg["cancel_y_animated"] if allow_animation else cfg["cancel_y_static"])  # type: ignore[attr-defined]
-            cancel_button._lmr_button_width = cfg["cancel_width"]  # type: ignore[attr-defined]
+            cancel_button._lmr_button_y = cfg["cancel_y"] if layout_key == "lmr_bg_cg_dialog" else (cfg["cancel_y_animated"] if allow_animation else cfg["cancel_y_static"])  # type: ignore[attr-defined]
+            cancel_button._lmr_button_middle_width = cfg["cancel_width"]  # type: ignore[attr-defined]
+            cancel_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["cancel_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
             add_button._lmr_button_x = cfg["add_x"]  # type: ignore[attr-defined]
-            add_button._lmr_button_y = (cfg["add_y_animated"] if allow_animation else cfg["add_y_static"])  # type: ignore[attr-defined]
-            add_button._lmr_button_width = cfg["add_width"]  # type: ignore[attr-defined]
+            add_button._lmr_button_y = cfg["add_y"] if layout_key == "lmr_bg_cg_dialog" else (cfg["add_y_animated"] if allow_animation else cfg["add_y_static"])  # type: ignore[attr-defined]
+            add_button._lmr_button_middle_width = cfg["add_width"]  # type: ignore[attr-defined]
+            add_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["add_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
             canvas = getattr(window, "_dialog_canvas", None)
             for button in (static_browse_widget, cancel_button, add_button):
                 item = getattr(button, "_lmr_button_item", None)
@@ -4373,6 +4903,7 @@ class EditorApp:
             update_form()
 
         window._lmr_layout_refresh = refresh_visual_layout  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout[layout_key]["width"], self.layout[layout_key]["height"])  # type: ignore[attr-defined]
         refresh_visual_layout()
         update_form()
         window.grab_set()
