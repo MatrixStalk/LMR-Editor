@@ -650,12 +650,17 @@ DEFAULT_LAYOUT = {
         "single_label_y": 92,
         "single_entry_x": 20,
         "single_entry_y": 114,
-        "single_entry_width": 640,
+        "single_entry_width": 520,
+        "single_browse_x": 554,
+        "single_browse_y": 112,
+        "single_browse_width": 62,
         "platform_label_x": 20,
         "platform_entry_x": 120,
+        "platform_browse_x": 574,
         "platform_start_y": 92,
         "platform_step_y": 44,
-        "platform_entry_width": 540,
+        "platform_entry_width": 440,
+        "platform_browse_width": 62,
         "cancel_x": 530,
         "cancel_y": 320,
         "cancel_width": 62,
@@ -4003,6 +4008,11 @@ class EditorApp:
                 popup.destroy()
             shell._popup = None  # type: ignore[attr-defined]
             self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "idle", variable.get().strip())
+            try:
+                window.lift()
+                window.focus_force()
+            except tk.TclError:
+                pass
 
         def choose_value(selected):
             variable.set(selected)
@@ -4197,6 +4207,12 @@ class EditorApp:
     def _ask_open_file(self, parent, title: str, filetypes):
         return filedialog.askopenfilename(parent=parent, title=title, filetypes=filetypes)
 
+    def _ask_directory(self, parent, title: str, initialdir: str = ""):
+        kwargs = {"parent": parent, "title": title}
+        if initialdir:
+            kwargs["initialdir"] = initialdir
+        return filedialog.askdirectory(**kwargs)
+
     def add_lmr_backdrop_bg(self):
         self._open_lmr_visual_resource_dialog(section_name="backdrop_bg", title="Add backdrop_bg", allow_animation=False, allow_prefab=True)
 
@@ -4389,29 +4405,51 @@ class EditorApp:
         parent = self._get_lmr_dialog_content(window)
         single_label = tk.Label(parent, text="Catalog Path", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
         single_entry, single_shell = self._create_lmr_text_entry(window, path_var, cfg0["single_entry_x"], cfg0["single_entry_y"], cfg0["single_entry_width"])
+        single_browse_button, _ = self._create_lmr_dialog_button(window, "Browse", cfg0["single_browse_x"], cfg0["single_browse_y"], lambda: path_var.set(self._ask_directory(window, "Select catalog directory", path_var.get().strip()) or path_var.get().strip()), middle_width=cfg0["single_browse_width"])
         single_label.place(x=cfg0["single_label_x"], y=cfg0["single_label_y"])
         platform_widgets = []
         for index, platform in enumerate(("windows", "linux", "macos", "android", "ios")):
             label = tk.Label(parent, text=platform, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
             y = cfg0["platform_start_y"] + index * cfg0["platform_step_y"]
             entry, shell = self._create_lmr_text_entry(window, platform_vars[platform], cfg0["platform_entry_x"], y + 22, cfg0["platform_entry_width"])
-            platform_widgets.append((label, entry, shell, y))
+            browse_button, _ = self._create_lmr_dialog_button(window, "Browse", cfg0["platform_browse_x"], y + 20, lambda p=platform: platform_vars[p].set(self._ask_directory(window, f"Select {p} directory", platform_vars[p].get().strip()) or platform_vars[p].get().strip()), middle_width=cfg0["platform_browse_width"])
+            platform_widgets.append((label, entry, shell, browse_button, y))
 
         def update_form(*_args):
             is_single = mode_var.get() == "single"
             if is_single:
                 single_label.place(x=cfg0["single_label_x"], y=cfg0["single_label_y"])
                 single_shell.place(x=cfg0["single_entry_x"], y=cfg0["single_entry_y"], width=cfg0["single_entry_width"], height=24)
+                single_browse_button.configure(state="normal")
+                canvas = getattr(window, "_dialog_canvas", None)
+                item = getattr(single_browse_button, "_lmr_button_item", None)
+                if canvas is not None and item is not None:
+                    canvas.itemconfigure(item, state="normal")
             else:
                 single_label.place_forget()
                 single_shell.place_forget()
-            for label, entry, shell, y in platform_widgets:
+                single_browse_button.configure(state="disabled")
+                canvas = getattr(window, "_dialog_canvas", None)
+                item = getattr(single_browse_button, "_lmr_button_item", None)
+                if canvas is not None and item is not None:
+                    canvas.itemconfigure(item, state="hidden")
+            for label, entry, shell, browse_button, y in platform_widgets:
                 if is_single:
                     label.place_forget()
                     shell.place_forget()
+                    browse_button.configure(state="disabled")
+                    canvas = getattr(window, "_dialog_canvas", None)
+                    item = getattr(browse_button, "_lmr_button_item", None)
+                    if canvas is not None and item is not None:
+                        canvas.itemconfigure(item, state="hidden")
                 else:
                     label.place(x=cfg0["platform_label_x"], y=y)
                     shell.place(x=cfg0["platform_entry_x"], y=y, width=cfg0["platform_entry_width"], height=24)
+                    browse_button.configure(state="normal")
+                    canvas = getattr(window, "_dialog_canvas", None)
+                    item = getattr(browse_button, "_lmr_button_item", None)
+                    if canvas is not None and item is not None:
+                        canvas.itemconfigure(item, state="normal")
 
         mode_var.trace_add("write", update_form)
 
@@ -4453,10 +4491,18 @@ class EditorApp:
             mode_shell.place_configure(x=cfg["mode_x"], y=cfg["mode_y"], width=cfg["mode_width"], height=24)
             single_label.place_configure(x=cfg["single_label_x"], y=cfg["single_label_y"])
             single_shell.place_configure(x=cfg["single_entry_x"], y=cfg["single_entry_y"], width=cfg["single_entry_width"], height=24)
-            for index, (label, entry, shell, _y) in enumerate(platform_widgets):
+            single_browse_button._lmr_button_x = cfg["single_browse_x"]  # type: ignore[attr-defined]
+            single_browse_button._lmr_button_y = cfg["single_browse_y"]  # type: ignore[attr-defined]
+            single_browse_button._lmr_button_middle_width = cfg["single_browse_width"]  # type: ignore[attr-defined]
+            single_browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["single_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+            for index, (label, entry, shell, browse_button, _y) in enumerate(platform_widgets):
                 y = cfg["platform_start_y"] + index * cfg["platform_step_y"]
                 label.place_configure(x=cfg["platform_label_x"], y=y)
                 shell.place_configure(x=cfg["platform_entry_x"], y=y, width=cfg["platform_entry_width"], height=24)
+                browse_button._lmr_button_x = cfg["platform_browse_x"]  # type: ignore[attr-defined]
+                browse_button._lmr_button_y = y + 20  # type: ignore[attr-defined]
+                browse_button._lmr_button_middle_width = cfg["platform_browse_width"]  # type: ignore[attr-defined]
+                browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["platform_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
                 button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
                 button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
@@ -4898,8 +4944,20 @@ class EditorApp:
             for button in (static_browse_widget, cancel_button, add_button):
                 item = getattr(button, "_lmr_button_item", None)
                 if canvas is not None and item is not None:
+                    max_x = max(0, cfg["width"] - button._lmr_button_width - 8)
+                    if button._lmr_button_x > max_x:
+                        button._lmr_button_x = max_x  # type: ignore[attr-defined]
                     canvas.coords(item, button._lmr_button_x, button._lmr_button_y)
                     canvas.itemconfigure(item, width=button._lmr_button_width, height=self.layout["lmr_resource_manager_window"]["button_height"])
+            if allow_animation and len(anim_widgets) >= 5:
+                canvas = getattr(window, "_dialog_canvas", None)
+                item = getattr(anim_button_widget, "_lmr_button_item", None)
+                if canvas is not None and item is not None:
+                    max_x = max(0, cfg["width"] - anim_button_widget._lmr_button_width - 8)
+                    if anim_button_widget._lmr_button_x > max_x:
+                        anim_button_widget._lmr_button_x = max_x  # type: ignore[attr-defined]
+                    canvas.coords(item, anim_button_widget._lmr_button_x, anim_button_widget._lmr_button_y)
+                    canvas.itemconfigure(item, width=anim_button_widget._lmr_button_width, height=self.layout["lmr_resource_manager_window"]["button_height"])
             update_form()
 
         window._lmr_layout_refresh = refresh_visual_layout  # type: ignore[attr-defined]
