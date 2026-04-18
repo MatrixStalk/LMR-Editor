@@ -532,6 +532,7 @@ DEFAULT_LAYOUT = {
         "play_x": 20,
         "play_y": 218,
         "stop_x": 94,
+        "stop_y": 218,
         "player_button_size": 24,
         "track_x": 136,
         "track_y": 219,
@@ -4486,7 +4487,7 @@ class EditorApp:
         )
         stop_button = self._create_image_button(
             sound_cfg["stop_x"],
-            sound_cfg["stop_y"],
+            sound_cfg.get("stop_y", sound_cfg["play_y"]),
             "button_stop_idle.png",
             "button_stop_onmouse.png",
             "button_stop_clicked.png",
@@ -4549,7 +4550,7 @@ class EditorApp:
             if stop_button is not None:
                 canvas = getattr(window, "_dialog_canvas", None)
                 if canvas is not None:
-                    canvas.coords(stop_button, cfg["stop_x"], cfg["stop_y"])
+                    canvas.coords(stop_button, cfg["stop_x"], cfg.get("stop_y", cfg["play_y"]))
             track_canvas.place_configure(x=cfg["track_x"], y=cfg["track_y"], width=cfg["track_width"], height=cfg["track_height"])
             time_label.place_configure(x=cfg["time_x"], y=cfg["time_y"])
             self._render_lmr_audio_trackbar(window, getattr(window, "_lmr_audio_track_fraction", 0.0))
