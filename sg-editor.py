@@ -46,6 +46,8 @@ LMR_FALLBACK_UNITY_VERSION = "6000.0.59f2"
 LAUNCHER_DIR = BASE_DIR.parent / "launcher"
 LAUNCHER_SOLUTION_PATH = LAUNCHER_DIR / "Launcher.sln"
 LAUNCHER_PROJECT_PATH = LAUNCHER_DIR / "Launcher.pyproj"
+LAUNCHER_PROJECT_GUID = "{B2A14A78-4E31-4EAB-A170-4F1D7B4D0A61}"
+LAUNCHER_SOLUTION_GUID = "{888888A0-9F3D-457C-B088-3A5042F75D52}"
 
 BACKGROUND_IMAGE_PATH = ASSETS_DIR / "mb_bg.png"
 TRANSPARENT_COLOR = "#010203"
@@ -1293,7 +1295,6 @@ class EditorApp:
         file_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         file_menu.add_command(label="Save", command=self.save_current_file)
         file_menu.add_command(label="Export ZIP", command=self.export_zip)
-        file_menu.add_command(label="Open Launcher Code in MSVS", command=self.open_launcher_code_in_msvs)
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
@@ -2266,12 +2267,102 @@ class EditorApp:
                     return path
         return None
 
+    def _build_launcher_pyproj_content(self) -> str:
+        launcher_rel = LAUNCHER_DIR / "launcher.py"
+        build_pack_rel = LAUNCHER_DIR / "build_resource_pack.py"
+        return f"""<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{LAUNCHER_PROJECT_GUID}</ProjectGuid>
+    <ProjectHome>.</ProjectHome>
+    <StartupFile>{launcher_rel.name}</StartupFile>
+    <SearchPath />
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <Name>Launcher</Name>
+    <RootNamespace>Launcher</RootNamespace>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <InterpreterId>Global|PythonCore|3.11</InterpreterId>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>false</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="{launcher_rel.name}" />
+    <Compile Include="{build_pack_rel.name}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Launcher.spec" />
+    <Content Include="layout_config.json" />
+    <Content Include="requirements-build.txt" />
+    <Content Include="launcher_state.json" />
+    <Content Include="download_state.json" />
+    <Content Include="update_state.json" />
+    <Content Include="installed_mods.json" />
+    <Content Include="checksums.json" />
+    <Content Include="launcher_secrets.json" />
+    <Content Include="run_launcher_temp.bat" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="assets\\" />
+    <Folder Include="locales\\" />
+    <Folder Include="logs\\" />
+    <Folder Include="download_cache\\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\\Microsoft\\VisualStudio\\v$(VisualStudioVersion)\\Python Tools\\Microsoft.PythonTools.targets" />
+</Project>
+"""
+
+    def _build_launcher_solution_content(self) -> str:
+        lines = [
+            "Microsoft Visual Studio Solution File, Format Version 12.00",
+            "# Visual Studio Version 17",
+            "VisualStudioVersion = 17.0.31903.59",
+            "MinimumVisualStudioVersion = 10.0.40219.1",
+            f'Project("{LAUNCHER_SOLUTION_GUID}") = "Launcher", "Launcher.pyproj", "{LAUNCHER_PROJECT_GUID}"',
+            "EndProject",
+            "Global",
+            "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution",
+            "\t\tDebug|Any CPU = Debug|Any CPU",
+            "\t\tRelease|Any CPU = Release|Any CPU",
+            "\tEndGlobalSection",
+            "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution",
+            f"\t\t{LAUNCHER_PROJECT_GUID}.Debug|Any CPU.ActiveCfg = Debug|Any CPU",
+            f"\t\t{LAUNCHER_PROJECT_GUID}.Debug|Any CPU.Build.0 = Debug|Any CPU",
+            f"\t\t{LAUNCHER_PROJECT_GUID}.Release|Any CPU.ActiveCfg = Release|Any CPU",
+            f"\t\t{LAUNCHER_PROJECT_GUID}.Release|Any CPU.Build.0 = Release|Any CPU",
+            "\tEndGlobalSection",
+            "\tGlobalSection(SolutionProperties) = preSolution",
+            "\t\tHideSolutionNode = FALSE",
+            "\tEndGlobalSection",
+            "EndGlobal",
+        ]
+        return "\n".join(lines) + "\n"
+
+    def _ensure_launcher_msvs_project(self) -> tuple[bool, str | None]:
+        if not LAUNCHER_DIR.exists():
+            return False, f"Launcher directory was not found:\n{LAUNCHER_DIR}"
+        launcher_py = LAUNCHER_DIR / "launcher.py"
+        if not launcher_py.exists():
+            return False, f"Launcher entry file was not found:\n{launcher_py}"
+        try:
+            LAUNCHER_PROJECT_PATH.write_text(self._build_launcher_pyproj_content(), encoding="utf-8")
+            LAUNCHER_SOLUTION_PATH.write_text(self._build_launcher_solution_content(), encoding="utf-8")
+        except OSError as error:
+            return False, str(error)
+        return True, None
+
     def open_launcher_code_in_msvs(self):
-        if not LAUNCHER_SOLUTION_PATH.exists() or not LAUNCHER_PROJECT_PATH.exists():
-            messagebox.showwarning(
-                "Launcher project not found",
-                f"MSVS project files were not found:\n{LAUNCHER_SOLUTION_PATH}\n{LAUNCHER_PROJECT_PATH}",
-            )
+        ok, error_message = self._ensure_launcher_msvs_project()
+        if not ok:
+            messagebox.showwarning("Launcher project not available", error_message or "Could not prepare the launcher project.")
             return
         devenv = self._find_visual_studio_devenv()
         if devenv is None:
