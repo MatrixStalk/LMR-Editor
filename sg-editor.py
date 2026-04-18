@@ -16,10 +16,9 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 try:
-    from PIL import Image, ImageOps, ImageTk
+    from PIL import Image, ImageTk
 except ImportError:
     Image = None
-    ImageOps = None
     ImageTk = None
 
 try:
@@ -54,9 +53,6 @@ SUPPORTED_MOD_GAMES = [
     {"id": "es", "name": "Everlasting Summer"},
     {"id": "es2", "name": "Everlasting Summer 2"},
 ]
-SUPPORTED_THEMES = {"dark", "light"}
-
-
 def load_json(path: Path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -99,7 +95,6 @@ def load_app_settings():
         "discord_rpc_enabled": True,
         "default_lmr_game_dir": "",
         "default_es_game_dir": "",
-        "theme": "dark",
     }
     settings = load_json(APP_SETTINGS_PATH, default_settings)
     merged = default_settings.copy()
@@ -108,8 +103,6 @@ def load_app_settings():
             merged[key] = value
         elif key in {"default_lmr_game_dir", "default_es_game_dir"} and isinstance(value, str):
             merged[key] = value
-        elif key == "theme" and isinstance(value, str) and value.lower() in SUPPORTED_THEMES:
-            merged[key] = value.lower()
     return merged
 
 
@@ -758,13 +751,11 @@ class DiscordPresenceManager:
         self.client_id = RPC_CONFIG["client_id"]
         self.large_image_key = RPC_CONFIG["large_image_key"]
         self.small_image_key = RPC_CONFIG["small_image_key"]
-        self.light_large_image_key = "sgmeditor_white"
         self.rpc = None
         self.connected = False
         self.started_at = int(time.time())
         self.last_payload = None
         self.enabled = APP_SETTINGS["discord_rpc_enabled"]
-        self.current_theme = APP_SETTINGS.get("theme", "dark")
 
     def connect(self):
         if not self.enabled or Presence is None or not self.client_id or self.connected:
@@ -777,11 +768,8 @@ class DiscordPresenceManager:
             self.rpc = None
             self.connected = False
 
-    def set_theme(self, theme: str):
-        self.current_theme = theme if theme in SUPPORTED_THEMES else "dark"
-
     def update(self, project_name: str, file_name: str):
-        self.last_payload = (project_name, file_name, self.current_theme)
+        self.last_payload = (project_name, file_name)
         if not self.enabled:
             return
         if not self.connected:
@@ -794,9 +782,8 @@ class DiscordPresenceManager:
             "large_text": APP_DISPLAY_NAME,
             "start": self.started_at,
         }
-        large_image_key = self.light_large_image_key if self.current_theme == "light" else self.large_image_key
-        if large_image_key:
-            payload["large_image"] = large_image_key
+        if self.large_image_key:
+            payload["large_image"] = self.large_image_key
         if self.small_image_key:
             payload["small_image"] = self.small_image_key
             payload["small_text"] = APP_DISPLAY_NAME
@@ -809,7 +796,7 @@ class DiscordPresenceManager:
     def ensure(self):
         if not self.enabled or self.connected or self.last_payload is None:
             return
-        self.update(self.last_payload[0], self.last_payload[1])
+        self.update(*self.last_payload)
 
     def clear(self):
         if not self.connected or self.rpc is None:
@@ -850,7 +837,6 @@ class EditorApp:
         self.assets = self._load_assets()
         self.resized_asset_cache = {}
         self.discord = DiscordPresenceManager()
-        self.discord.set_theme(self._current_theme())
 
         self.canvas = None
         self.file_tree = None
@@ -920,93 +906,24 @@ class EditorApp:
         self._watch_layout_file()
         self._schedule_line_numbers_refresh()
 
-    def _current_theme(self) -> str:
-        settings = getattr(self, "app_settings", APP_SETTINGS)
-        theme = str(settings.get("theme", "dark")).lower()
-        return theme if theme in SUPPORTED_THEMES else "dark"
-
-    def _is_light_theme(self) -> bool:
-        return self._current_theme() == "light"
-
     def _theme_color(self, color: str) -> str:
-        if not self._is_light_theme():
-            return color
-        if not isinstance(color, str):
-            return color
-        if color == TRANSPARENT_COLOR:
-            return color
-        if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
-            return color
-        red = 255 - int(color[1:3], 16)
-        green = 255 - int(color[3:5], 16)
-        blue = 255 - int(color[5:7], 16)
-        return f"#{red:02x}{green:02x}{blue:02x}"
-
-    def _theme_label(self) -> str:
-        return "Light" if self._is_light_theme() else "Dark"
+        return color
 
     def _apply_theme_to_pil_image(self, image):
-        themed = image.convert("RGBA")
-        if not self._is_light_theme() or ImageOps is None:
-            return themed
-        red, green, blue, alpha = themed.split()
-        rgb = Image.merge("RGB", (red, green, blue))
-        inverted = ImageOps.invert(rgb)
-        red, green, blue = inverted.split()
-        return Image.merge("RGBA", (red, green, blue, alpha))
+        return image.convert("RGBA")
 
     def _should_preserve_asset_colors(self, name: str) -> bool:
         return name in {
             "exit_btn_idle.png",
             "exit_btn_onmouse.png",
             "exit_btn_clicked.png",
+            "me_logo.png",
+            "sgme_logo.png",
+            "lunar_avatar.png",
+            "py_logo.png",
+            "sg_logo.png",
         }
 
-    def _rebuild_ui_for_theme(self):
-        if self.current_file is not None and self.editor_text is not None:
-            self.file_buffers[self.current_file] = self._get_editor_content()
-
-        try:
-            self.close_settings_window()
-        except Exception:
-            pass
-
-        for child in list(self.root.winfo_children()):
-            try:
-                child.destroy()
-            except tk.TclError:
-                pass
-
-        self.resized_asset_cache.clear()
-        self.assets = self._load_assets()
-        self.canvas = None
-        self.file_tree = None
-        self.editor_text = None
-        self.line_numbers = None
-        self.editor_scrollbar = None
-        self.editor_h_scrollbar = None
-        self.header_id = None
-        self.mode_id = None
-        self.cursor_id = None
-        self.top_menu_item_ids = []
-        self.tree_item_paths = {}
-        self.file_tab_widgets = []
-        self.file_tab_window_ids = []
-        self.file_tab_item_ids = []
-        self.file_tab_tags = []
-        self.file_tab_render_job = None
-        self.hovered_tree_item = None
-
-        self._build_window()
-        self._build_popup_menus()
-        self._reload_project_files()
-        self.discord.set_theme(self._current_theme())
-        if self.current_file is not None:
-            self._set_editor_content(self.file_buffers.get(self.current_file, ""))
-            self._refresh_line_numbers(force=True)
-        self._update_status(refresh_lines=False)
-        self._request_render_file_tabs()
-        self._update_presence()
 
     def _center_geometry(self):
         width = self.layout["window"]["width"]
@@ -2426,7 +2343,6 @@ class EditorApp:
         self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
         self.settings_vars["default_lmr_game_dir"] = tk.StringVar(value=self.app_settings.get("default_lmr_game_dir", ""))
         self.settings_vars["default_es_game_dir"] = tk.StringVar(value=self.app_settings.get("default_es_game_dir", ""))
-        self.settings_vars["theme"] = tk.StringVar(value=self._current_theme())
 
         tabs = [
             ("Info", self._render_info_settings_tab),
@@ -2576,31 +2492,10 @@ class EditorApp:
         self._render_action_button("reload_layout", "Reload Layout", 0, 112, self._reload_layout)
 
     def _render_preferences_settings_tab(self):
-        self._render_theme_row(0, 24)
-        self._render_settings_path_row(0, 84, "Default LMR Game Folder", self.settings_vars["default_lmr_game_dir"], "Select default Love, Money, Rock'n'Roll folder")
-        self._render_settings_path_row(0, 144, "Default ES Game Folder", self.settings_vars["default_es_game_dir"], "Select default Everlasting Summer folder")
-        self._render_action_button("save_settings", "Save Settings", 0, 204, self._save_settings)
-        self._render_action_button("open_app_settings", "Open App Settings", 0, 244, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
-
-    def _render_theme_row(self, rel_x, rel_y):
-        x, y = self._content_anchor(rel_x, rel_y)
-        label_item = self.settings_canvas.create_text(
-            x,
-            y,
-            text="Theme",
-            anchor="nw",
-            fill=self._theme_color("#f0f0f0"),
-            font=("Cascadia Mono", 9, "bold"),
-        )
-        self.settings_content_items.append(label_item)
-        theme_value = str(self.settings_vars["theme"].get()).lower()
-        theme_label = "Theme: Light" if theme_value == "light" else "Theme: Dark"
-
-        def toggle_theme():
-            self.settings_vars["theme"].set("light" if str(self.settings_vars["theme"].get()).lower() == "dark" else "dark")
-            self._select_settings_tab("Preferences")
-
-        self._render_action_button("save_settings", theme_label, rel_x, rel_y + 24, toggle_theme)
+        self._render_settings_path_row(0, 24, "Default LMR Game Folder", self.settings_vars["default_lmr_game_dir"], "Select default Love, Money, Rock'n'Roll folder")
+        self._render_settings_path_row(0, 84, "Default ES Game Folder", self.settings_vars["default_es_game_dir"], "Select default Everlasting Summer folder")
+        self._render_action_button("save_settings", "Save Settings", 0, 144, self._save_settings)
+        self._render_action_button("open_app_settings", "Open App Settings", 0, 184, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
 
     def _render_reset_settings_tab(self):
         self._render_action_button("reset_layout", "Reset Layout To Defaults", 0, 24, self._reset_layout_to_defaults)
@@ -2795,17 +2690,13 @@ class EditorApp:
         self.settings_vars["discord_rpc_enabled"].set(self.app_settings["discord_rpc_enabled"])
         self.settings_vars["default_lmr_game_dir"].set(self.app_settings.get("default_lmr_game_dir", ""))
         self.settings_vars["default_es_game_dir"].set(self.app_settings.get("default_es_game_dir", ""))
-        self.settings_vars["theme"].set(self.app_settings.get("theme", "dark"))
         APP_SETTINGS_PATH.write_text(json.dumps(self.app_settings, indent=2), encoding="utf-8")
 
     def _save_settings(self):
-        previous_theme = self._current_theme()
         self.app_settings["auto_reload_layout"] = bool(self.settings_vars["auto_reload_layout"].get())
         self.app_settings["discord_rpc_enabled"] = bool(self.settings_vars["discord_rpc_enabled"].get())
         self.app_settings["default_lmr_game_dir"] = str(self.settings_vars["default_lmr_game_dir"].get()).strip()
         self.app_settings["default_es_game_dir"] = str(self.settings_vars["default_es_game_dir"].get()).strip()
-        selected_theme = str(self.settings_vars["theme"].get()).lower()
-        self.app_settings["theme"] = selected_theme if selected_theme in SUPPORTED_THEMES else "dark"
         APP_SETTINGS_PATH.write_text(json.dumps(self.app_settings, indent=2), encoding="utf-8")
         self.discord.enabled = self.app_settings["discord_rpc_enabled"]
         if not self.discord.enabled:
@@ -2814,10 +2705,7 @@ class EditorApp:
             self.discord.rpc = None
         else:
             self._update_presence()
-        theme_changed = previous_theme != self._current_theme()
         self.close_settings_window()
-        if theme_changed:
-            self._rebuild_ui_for_theme()
 
     def close_settings_window(self):
         if self.settings_window is not None and self.settings_window.winfo_exists():
@@ -6212,7 +6100,6 @@ class EditorApp:
     def _update_presence(self):
         project_name = self._get_presence_project_name()
         file_name = self._get_project_game_name()
-        self.discord.set_theme(self._current_theme())
         self.discord.update(project_name, file_name)
 
     def _presence_loop(self):
