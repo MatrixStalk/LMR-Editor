@@ -529,6 +529,16 @@ DEFAULT_LAYOUT = {
         "browse_x": 514,
         "browse_y": 164,
         "browse_width": 72,
+        "play_x": 20,
+        "play_y": 218,
+        "stop_x": 94,
+        "player_button_size": 24,
+        "track_x": 136,
+        "track_y": 219,
+        "track_width": 240,
+        "track_height": 18,
+        "time_x": 388,
+        "time_y": 221,
         "cancel_x": 424,
         "cancel_y": 218,
         "cancel_width": 72,
@@ -3174,6 +3184,183 @@ class EditorApp:
                 pass
         self.asset_viewer_audio_temp_path = None
 
+    def _mci_send_string(self, command: str):
+        return ctypes.windll.winmm.mciSendStringW(command, None, 0, None)
+
+    def _mci_query_string(self, command: str) -> str:
+        buffer = ctypes.create_unicode_buffer(255)
+        result = ctypes.windll.winmm.mciSendStringW(command, buffer, len(buffer), None)
+        if result != 0:
+            return ""
+        return buffer.value.strip()
+
+    def _close_lmr_dialog_audio(self, window):
+        alias = getattr(window, "_lmr_audio_alias", "")
+        if alias:
+            try:
+                self._mci_send_string(f"stop {alias}")
+            except Exception:
+                pass
+            try:
+                self._mci_send_string(f"close {alias}")
+            except Exception:
+                pass
+        window._lmr_audio_alias = ""  # type: ignore[attr-defined]
+        window._lmr_audio_length_ms = 0  # type: ignore[attr-defined]
+        progress_job = getattr(window, "_lmr_audio_progress_job", None)
+        if progress_job is not None:
+            try:
+                window.after_cancel(progress_job)
+            except tk.TclError:
+                pass
+        window._lmr_audio_progress_job = None  # type: ignore[attr-defined]
+
+    def _format_audio_time(self, milliseconds: int) -> str:
+        total_seconds = max(0, int(milliseconds // 1000))
+        minutes, seconds = divmod(total_seconds, 60)
+        return f"{minutes:02d}:{seconds:02d}"
+
+    def _render_lmr_audio_trackbar(self, window, fraction: float = 0.0):
+        track_canvas = getattr(window, "_lmr_audio_track_canvas", None)
+        if track_canvas is None or not track_canvas.winfo_exists():
+            return
+        cfg = self.layout["lmr_sound_dialog"]
+        width = max(1, int(cfg["track_width"]))
+        height = max(1, int(cfg["track_height"]))
+        button_size = max(10, int(cfg.get("player_button_size", 24)))
+        fraction = max(0.0, min(float(fraction), 1.0))
+        track_canvas.configure(width=width, height=height)
+        track_canvas.delete("all")
+
+        unplayed = self._load_asset_exact("trackbar_unplayed_part.png", width, height)
+        if unplayed is not None:
+            track_canvas._track_images = [unplayed]  # type: ignore[attr-defined]
+            track_canvas.create_image(0, 0, image=unplayed, anchor="nw")
+        else:
+            track_canvas.create_rectangle(0, 0, width, height, fill="#1b1b1b", outline="")
+
+        played_width = max(height, int(round(width * fraction))) if fraction > 0 else 0
+        if played_width > 0:
+            played = self._load_asset_exact("trackbar.png", played_width, height)
+            if played is not None:
+                track_canvas._track_images = getattr(track_canvas, "_track_images", []) + [played]  # type: ignore[attr-defined]
+                track_canvas.create_image(0, 0, image=played, anchor="nw")
+
+        thumb_state = "clicked" if getattr(window, "_lmr_audio_track_pressed", False) else ("onmouse" if getattr(window, "_lmr_audio_track_hovered", False) else "idle")
+        thumb_name = {
+            "idle": "track_list_button_idle.png",
+            "onmouse": "track_list_button_onmouse.png",
+            "clicked": "track_list_button_clicked.png",
+        }[thumb_state]
+        thumb = self._load_asset_exact(thumb_name, button_size, button_size)
+        thumb_x = int(round((width - button_size) * fraction))
+        thumb_y = max(0, (height - button_size) // 2)
+        if thumb is not None:
+            track_canvas._track_images = getattr(track_canvas, "_track_images", []) + [thumb]  # type: ignore[attr-defined]
+            track_canvas.create_image(thumb_x, thumb_y, image=thumb, anchor="nw")
+        window._lmr_audio_track_fraction = fraction  # type: ignore[attr-defined]
+
+    def _update_lmr_sound_time_label(self, window, position_ms: int, length_ms: int):
+        time_var = getattr(window, "_lmr_audio_time_var", None)
+        if time_var is not None:
+            time_var.set(f"{self._format_audio_time(position_ms)} / {self._format_audio_time(length_ms)}")
+
+    def _poll_lmr_dialog_audio_progress(self, window):
+        if not window.winfo_exists():
+            return
+        alias = getattr(window, "_lmr_audio_alias", "")
+        if not alias:
+            return
+        length_ms = int(getattr(window, "_lmr_audio_length_ms", 0) or 0)
+        position_text = self._mci_query_string(f"status {alias} position")
+        mode_text = self._mci_query_string(f"status {alias} mode").lower()
+        try:
+            position_ms = int(position_text or "0")
+        except ValueError:
+            position_ms = 0
+        fraction = 0.0 if length_ms <= 0 else min(1.0, max(0.0, position_ms / max(1, length_ms)))
+        self._render_lmr_audio_trackbar(window, fraction)
+        self._update_lmr_sound_time_label(window, position_ms, length_ms)
+        if mode_text == "stopped" and length_ms > 0 and position_ms >= max(0, length_ms - 250):
+            self._close_lmr_dialog_audio(window)
+            self._render_lmr_audio_trackbar(window, 0.0)
+            self._update_lmr_sound_time_label(window, 0, length_ms)
+            return
+        window._lmr_audio_progress_job = window.after(150, lambda w=window: self._poll_lmr_dialog_audio_progress(w))  # type: ignore[attr-defined]
+
+    def _play_lmr_dialog_audio(self, window, source_path: str):
+        source = Path(source_path.strip())
+        if not source.exists():
+            self._show_lmr_warning("Missing File", "Select a valid sound file first.", window)
+            return
+        self._close_lmr_dialog_audio(window)
+        alias = f"sgm_lmr_sound_{id(window)}"
+        ext = source.suffix.lower()
+        commands = []
+        if ext == ".wav":
+            commands.append(f'open "{source}" type waveaudio alias {alias}')
+        commands.append(f'open "{source}" type mpegvideo alias {alias}')
+        commands.append(f'open "{source}" alias {alias}')
+        opened = False
+        for command in commands:
+            try:
+                if self._mci_send_string(command) == 0:
+                    opened = True
+                    break
+            except Exception:
+                pass
+        if not opened:
+            self._show_lmr_warning("Playback Error", "Could not open this audio file for playback.", window)
+            return
+        try:
+            self._mci_send_string(f"set {alias} time format milliseconds")
+        except Exception:
+            pass
+        length_text = self._mci_query_string(f"status {alias} length")
+        try:
+            length_ms = int(length_text or "0")
+        except ValueError:
+            length_ms = 0
+        try:
+            self._mci_send_string(f"play {alias}")
+        except Exception:
+            self._close_lmr_dialog_audio(window)
+            self._show_lmr_warning("Playback Error", "Could not start audio playback.", window)
+            return
+        window._lmr_audio_alias = alias  # type: ignore[attr-defined]
+        window._lmr_audio_length_ms = length_ms  # type: ignore[attr-defined]
+        self._render_lmr_audio_trackbar(window, 0.0)
+        self._update_lmr_sound_time_label(window, 0, length_ms)
+        self._poll_lmr_dialog_audio_progress(window)
+
+    def _seek_lmr_dialog_audio(self, window, fraction: float):
+        alias = getattr(window, "_lmr_audio_alias", "")
+        length_ms = int(getattr(window, "_lmr_audio_length_ms", 0) or 0)
+        if not alias or length_ms <= 0:
+            return
+        fraction = max(0.0, min(float(fraction), 1.0))
+        target_ms = int(round(length_ms * fraction))
+        try:
+            self._mci_send_string(f"seek {alias} to {target_ms}")
+            self._mci_send_string(f"play {alias}")
+        except Exception:
+            return
+        self._render_lmr_audio_trackbar(window, fraction)
+        self._update_lmr_sound_time_label(window, target_ms, length_ms)
+
+    def _reset_lmr_dialog_audio_ui(self, window):
+        self._render_lmr_audio_trackbar(window, 0.0)
+        self._update_lmr_sound_time_label(window, 0, int(getattr(window, "_lmr_audio_length_ms", 0) or 0))
+
+    def _handle_lmr_audio_track_event(self, window, event):
+        track_canvas = getattr(window, "_lmr_audio_track_canvas", None)
+        if track_canvas is None:
+            return "break"
+        width = max(1, int(track_canvas.winfo_width()))
+        fraction = max(0.0, min(float(getattr(event, "x", 0)) / width, 1.0))
+        self._seek_lmr_dialog_audio(window, fraction)
+        return "break"
+
     def _extract_asset_preview_image(self, data):
         if Image is None or ImageTk is None:
             return None
@@ -3815,6 +4002,7 @@ class EditorApp:
         label_widget.image = tk_image
 
     def _close_lmr_dialog(self, window):
+        self._close_lmr_dialog_audio(window)
         try:
             window.grab_release()
         except tk.TclError:
@@ -4277,7 +4465,52 @@ class EditorApp:
         asset_entry, _ = self._create_lmr_text_entry(window, asset_name_var, sound_cfg["asset_entry_x"], sound_cfg["asset_entry_y"], sound_cfg["asset_entry_width"])
         folder_entry, _ = self._create_lmr_text_entry(window, folder_var, sound_cfg["folder_entry_x"], sound_cfg["folder_entry_y"], sound_cfg["folder_entry_width"])
         file_entry, _ = self._create_lmr_text_entry(window, file_var, sound_cfg["file_entry_x"], sound_cfg["file_entry_y"], sound_cfg["file_entry_width"])
-        browse_button, _ = self._create_lmr_dialog_button(window, "Browse", sound_cfg["browse_x"], sound_cfg["browse_y"], lambda: file_var.set(self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")])), middle_width=sound_cfg["browse_width"])
+
+        def browse_sound():
+            selected = self._ask_open_file(window, "Select sound file", [("Audio", "*.ogg *.wav *.mp3"), ("All files", "*.*")])
+            if selected:
+                file_var.set(selected)
+                self._close_lmr_dialog_audio(window)
+                self._reset_lmr_dialog_audio_ui(window)
+
+        browse_button, _ = self._create_lmr_dialog_button(window, "Browse", sound_cfg["browse_x"], sound_cfg["browse_y"], browse_sound, middle_width=sound_cfg["browse_width"])
+        play_button = self._create_image_button(
+            sound_cfg["play_x"],
+            sound_cfg["play_y"],
+            "button_play_idle.png",
+            "button_play_onmouse.png",
+            "button_play_clicked.png",
+            lambda: self._play_lmr_dialog_audio(window, file_var.get()),
+            parent_window=window,
+            parent_canvas=getattr(window, "_dialog_canvas", None),
+        )
+        stop_button = self._create_image_button(
+            sound_cfg["stop_x"],
+            sound_cfg["stop_y"],
+            "button_stop_idle.png",
+            "button_stop_onmouse.png",
+            "button_stop_clicked.png",
+            lambda: (self._close_lmr_dialog_audio(window), self._reset_lmr_dialog_audio_ui(window)),
+            parent_window=window,
+            parent_canvas=getattr(window, "_dialog_canvas", None),
+        )
+        content_parent = self._get_lmr_dialog_content(window)
+        track_canvas = tk.Canvas(content_parent, bg=self._theme_color("#111111"), highlightthickness=0, bd=0, cursor="hand2")
+        track_canvas.place(x=sound_cfg["track_x"], y=sound_cfg["track_y"], width=sound_cfg["track_width"], height=sound_cfg["track_height"])
+        time_var = tk.StringVar(value="00:00 / 00:00")
+        time_label = tk.Label(content_parent, textvariable=time_var, bg=self._theme_color("#111111"), fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 8, "bold"), anchor="w")
+        time_label.place(x=sound_cfg["time_x"], y=sound_cfg["time_y"])
+        window._lmr_audio_track_canvas = track_canvas  # type: ignore[attr-defined]
+        window._lmr_audio_time_var = time_var  # type: ignore[attr-defined]
+        window._lmr_audio_track_hovered = False  # type: ignore[attr-defined]
+        window._lmr_audio_track_pressed = False  # type: ignore[attr-defined]
+        self._reset_lmr_dialog_audio_ui(window)
+        file_var.trace_add("write", lambda *_args, w=window: (self._close_lmr_dialog_audio(w), self._reset_lmr_dialog_audio_ui(w)))
+        track_canvas.bind("<Button-1>", lambda event, w=window: (setattr(w, "_lmr_audio_track_pressed", True), self._handle_lmr_audio_track_event(w, event)))
+        track_canvas.bind("<B1-Motion>", lambda event, w=window: self._handle_lmr_audio_track_event(w, event))
+        track_canvas.bind("<ButtonRelease-1>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_pressed", False), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0))))
+        track_canvas.bind("<Enter>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_hovered", True), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0))))
+        track_canvas.bind("<Leave>", lambda _event, w=window: (setattr(w, "_lmr_audio_track_hovered", False), setattr(w, "_lmr_audio_track_pressed", False), self._render_lmr_audio_trackbar(w, getattr(w, "_lmr_audio_track_fraction", 0.0))))
 
         def submit():
             source = Path(file_var.get().strip())
@@ -4309,6 +4542,17 @@ class EditorApp:
                 button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
             for label_widget, prefix in zip(label_widgets, ("technical_label", "asset_label", "folder_label", "file_label")):
                 label_widget.place_configure(x=cfg[f"{prefix}_x"], y=cfg[f"{prefix}_y"])
+            if play_button is not None:
+                canvas = getattr(window, "_dialog_canvas", None)
+                if canvas is not None:
+                    canvas.coords(play_button, cfg["play_x"], cfg["play_y"])
+            if stop_button is not None:
+                canvas = getattr(window, "_dialog_canvas", None)
+                if canvas is not None:
+                    canvas.coords(stop_button, cfg["stop_x"], cfg["stop_y"])
+            track_canvas.place_configure(x=cfg["track_x"], y=cfg["track_y"], width=cfg["track_width"], height=cfg["track_height"])
+            time_label.place_configure(x=cfg["time_x"], y=cfg["time_y"])
+            self._render_lmr_audio_trackbar(window, getattr(window, "_lmr_audio_track_fraction", 0.0))
         window._lmr_size_provider = lambda: (self.layout["lmr_sound_dialog"]["width"], self.layout["lmr_sound_dialog"]["height"])  # type: ignore[attr-defined]
         window._lmr_layout_refresh = refresh_sound_layout  # type: ignore[attr-defined]
         refresh_sound_layout()
