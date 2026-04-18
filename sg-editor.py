@@ -4,7 +4,6 @@ import queue
 import re
 import shutil
 import struct
-import subprocess
 import threading
 import time
 import tkinter as tk
@@ -17,9 +16,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 try:
-    from PIL import Image, ImageTk
+    from PIL import Image, ImageOps, ImageTk
 except ImportError:
     Image = None
+    ImageOps = None
     ImageTk = None
 
 try:
@@ -43,11 +43,6 @@ LMR_RESOURCES_ASSETS_PATH = LMR_GAME_DATA_DIR / "resources.assets"
 LMR_RESOURCES_RESS_PATH = LMR_GAME_DATA_DIR / "resources.assets.resS"
 LMR_BUNDLES_DIR = LMR_GAME_DATA_DIR / "StreamingAssets" / "aa" / "StandaloneWindows64"
 LMR_FALLBACK_UNITY_VERSION = "6000.0.59f2"
-LAUNCHER_DIR = BASE_DIR.parent / "launcher"
-LAUNCHER_SOLUTION_PATH = LAUNCHER_DIR / "Launcher.sln"
-LAUNCHER_PROJECT_PATH = LAUNCHER_DIR / "Launcher.pyproj"
-LAUNCHER_PROJECT_GUID = "{B2A14A78-4E31-4EAB-A170-4F1D7B4D0A61}"
-LAUNCHER_SOLUTION_GUID = "{888888A0-9F3D-457C-B088-3A5042F75D52}"
 
 BACKGROUND_IMAGE_PATH = ASSETS_DIR / "mb_bg.png"
 TRANSPARENT_COLOR = "#010203"
@@ -59,6 +54,7 @@ SUPPORTED_MOD_GAMES = [
     {"id": "es", "name": "Everlasting Summer"},
     {"id": "es2", "name": "Everlasting Summer 2"},
 ]
+SUPPORTED_THEMES = {"dark", "light"}
 
 
 def load_json(path: Path, default):
@@ -103,6 +99,7 @@ def load_app_settings():
         "discord_rpc_enabled": True,
         "default_lmr_game_dir": "",
         "default_es_game_dir": "",
+        "theme": "dark",
     }
     settings = load_json(APP_SETTINGS_PATH, default_settings)
     merged = default_settings.copy()
@@ -111,6 +108,8 @@ def load_app_settings():
             merged[key] = value
         elif key in {"default_lmr_game_dir", "default_es_game_dir"} and isinstance(value, str):
             merged[key] = value
+        elif key == "theme" and isinstance(value, str) and value.lower() in SUPPORTED_THEMES:
+            merged[key] = value.lower()
     return merged
 
 
@@ -759,11 +758,13 @@ class DiscordPresenceManager:
         self.client_id = RPC_CONFIG["client_id"]
         self.large_image_key = RPC_CONFIG["large_image_key"]
         self.small_image_key = RPC_CONFIG["small_image_key"]
+        self.light_large_image_key = "sgmeditor_white"
         self.rpc = None
         self.connected = False
         self.started_at = int(time.time())
         self.last_payload = None
         self.enabled = APP_SETTINGS["discord_rpc_enabled"]
+        self.current_theme = APP_SETTINGS.get("theme", "dark")
 
     def connect(self):
         if not self.enabled or Presence is None or not self.client_id or self.connected:
@@ -776,8 +777,11 @@ class DiscordPresenceManager:
             self.rpc = None
             self.connected = False
 
+    def set_theme(self, theme: str):
+        self.current_theme = theme if theme in SUPPORTED_THEMES else "dark"
+
     def update(self, project_name: str, file_name: str):
-        self.last_payload = (project_name, file_name)
+        self.last_payload = (project_name, file_name, self.current_theme)
         if not self.enabled:
             return
         if not self.connected:
@@ -790,8 +794,9 @@ class DiscordPresenceManager:
             "large_text": APP_DISPLAY_NAME,
             "start": self.started_at,
         }
-        if self.large_image_key:
-            payload["large_image"] = self.large_image_key
+        large_image_key = self.light_large_image_key if self.current_theme == "light" else self.large_image_key
+        if large_image_key:
+            payload["large_image"] = large_image_key
         if self.small_image_key:
             payload["small_image"] = self.small_image_key
             payload["small_text"] = APP_DISPLAY_NAME
@@ -804,7 +809,7 @@ class DiscordPresenceManager:
     def ensure(self):
         if not self.enabled or self.connected or self.last_payload is None:
             return
-        self.update(*self.last_payload)
+        self.update(self.last_payload[0], self.last_payload[1])
 
     def clear(self):
         if not self.connected or self.rpc is None:
@@ -821,6 +826,7 @@ class EditorApp:
         self.root = root
         self.layout = self._sanitize_layout(load_json(LAYOUT_PATH, DEFAULT_LAYOUT))
         self.layout_mtime = self._get_layout_mtime()
+        self.app_settings = APP_SETTINGS.copy()
         self.root.title(APP_DISPLAY_NAME)
         self.root.overrideredirect(True)
         self.root.resizable(False, False)
@@ -844,7 +850,7 @@ class EditorApp:
         self.assets = self._load_assets()
         self.resized_asset_cache = {}
         self.discord = DiscordPresenceManager()
-        self.app_settings = APP_SETTINGS.copy()
+        self.discord.set_theme(self._current_theme())
 
         self.canvas = None
         self.file_tree = None
@@ -888,7 +894,7 @@ class EditorApp:
         self.asset_viewer_audio_info_var = None
         self.asset_viewer_audio_temp_path = None
         self.settings_canvas = None
-        self.settings_vars: dict[str, tk.BooleanVar] = {}
+        self.settings_vars: dict[str, tk.Variable] = {}
         self.settings_drag_offset_x = 0
         self.settings_drag_offset_y = 0
         self.settings_tab_items = {}
@@ -913,6 +919,94 @@ class EditorApp:
         self._presence_loop()
         self._watch_layout_file()
         self._schedule_line_numbers_refresh()
+
+    def _current_theme(self) -> str:
+        settings = getattr(self, "app_settings", APP_SETTINGS)
+        theme = str(settings.get("theme", "dark")).lower()
+        return theme if theme in SUPPORTED_THEMES else "dark"
+
+    def _is_light_theme(self) -> bool:
+        return self._current_theme() == "light"
+
+    def _theme_color(self, color: str) -> str:
+        if not self._is_light_theme():
+            return color
+        if not isinstance(color, str):
+            return color
+        if color == TRANSPARENT_COLOR:
+            return color
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            return color
+        red = 255 - int(color[1:3], 16)
+        green = 255 - int(color[3:5], 16)
+        blue = 255 - int(color[5:7], 16)
+        return f"#{red:02x}{green:02x}{blue:02x}"
+
+    def _theme_label(self) -> str:
+        return "Light" if self._is_light_theme() else "Dark"
+
+    def _apply_theme_to_pil_image(self, image):
+        themed = image.convert("RGBA")
+        if not self._is_light_theme() or ImageOps is None:
+            return themed
+        red, green, blue, alpha = themed.split()
+        rgb = Image.merge("RGB", (red, green, blue))
+        inverted = ImageOps.invert(rgb)
+        red, green, blue = inverted.split()
+        return Image.merge("RGBA", (red, green, blue, alpha))
+
+    def _should_preserve_asset_colors(self, name: str) -> bool:
+        return name in {
+            "exit_btn_idle.png",
+            "exit_btn_onmouse.png",
+            "exit_btn_clicked.png",
+        }
+
+    def _rebuild_ui_for_theme(self):
+        if self.current_file is not None and self.editor_text is not None:
+            self.file_buffers[self.current_file] = self._get_editor_content()
+
+        try:
+            self.close_settings_window()
+        except Exception:
+            pass
+
+        for child in list(self.root.winfo_children()):
+            try:
+                child.destroy()
+            except tk.TclError:
+                pass
+
+        self.resized_asset_cache.clear()
+        self.assets = self._load_assets()
+        self.canvas = None
+        self.file_tree = None
+        self.editor_text = None
+        self.line_numbers = None
+        self.editor_scrollbar = None
+        self.editor_h_scrollbar = None
+        self.header_id = None
+        self.mode_id = None
+        self.cursor_id = None
+        self.top_menu_item_ids = []
+        self.tree_item_paths = {}
+        self.file_tab_widgets = []
+        self.file_tab_window_ids = []
+        self.file_tab_item_ids = []
+        self.file_tab_tags = []
+        self.file_tab_render_job = None
+        self.hovered_tree_item = None
+
+        self._build_window()
+        self._build_popup_menus()
+        self._reload_project_files()
+        self.discord.set_theme(self._current_theme())
+        if self.current_file is not None:
+            self._set_editor_content(self.file_buffers.get(self.current_file, ""))
+            self._refresh_line_numbers(force=True)
+        self._update_status(refresh_lines=False)
+        self._request_render_file_tabs()
+        self._update_presence()
 
     def _center_geometry(self):
         width = self.layout["window"]["width"]
@@ -1003,7 +1097,8 @@ class EditorApp:
     def _load_image_asset(self, path: Path):
         if Image is not None and ImageTk is not None:
             with Image.open(path) as source:
-                return ImageTk.PhotoImage(source.convert("RGBA"))
+                themed = source.convert("RGBA") if self._should_preserve_asset_colors(path.name) else self._apply_theme_to_pil_image(source)
+                return ImageTk.PhotoImage(themed)
         return tk.PhotoImage(file=str(path))
 
     def _fit_icon(self, image, max_width: int, max_height: int):
@@ -1052,7 +1147,8 @@ class EditorApp:
 
         if Image is not None and ImageTk is not None:
             with Image.open(path) as source:
-                resized = source.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
+                themed = source.convert("RGBA") if self._should_preserve_asset_colors(name) else self._apply_theme_to_pil_image(source)
+                resized = themed.resize((width, height), Image.Resampling.LANCZOS)
                 image = ImageTk.PhotoImage(resized)
                 self.resized_asset_cache[cache_key] = image
                 return image
@@ -1076,7 +1172,8 @@ class EditorApp:
 
         if Image is not None and ImageTk is not None:
             with Image.open(path) as source:
-                resized = source.convert("RGBA").resize((width, height), Image.Resampling.LANCZOS)
+                themed = source.convert("RGBA") if self._should_preserve_asset_colors(name) else self._apply_theme_to_pil_image(source)
+                resized = themed.resize((width, height), Image.Resampling.LANCZOS)
                 if alpha < 1.0:
                     r, g, b, a = resized.split()
                     a = a.point(lambda value: int(value * alpha))
@@ -1097,9 +1194,9 @@ class EditorApp:
             pass
         style.configure(
             "Files.Treeview",
-            background=PANEL_BACKGROUND,
-            fieldbackground=PANEL_BACKGROUND,
-            foreground="#f0f0f0",
+            background=self._theme_color(PANEL_BACKGROUND),
+            fieldbackground=self._theme_color(PANEL_BACKGROUND),
+            foreground=self._theme_color("#f0f0f0"),
             borderwidth=0,
             highlightthickness=0,
             relief="flat",
@@ -1108,8 +1205,8 @@ class EditorApp:
         )
         style.map(
             "Files.Treeview",
-            background=[("selected", "#23262c")],
-            foreground=[("selected", "#ffffff")],
+            background=[("selected", self._theme_color("#23262c"))],
+            foreground=[("selected", self._theme_color("#ffffff"))],
         )
         style.layout("Files.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
 
@@ -1160,11 +1257,11 @@ class EditorApp:
         editor_font = ("Cascadia Mono", 10)
         self.editor_text = tk.Text(
             self.root,
-            bg=PANEL_BACKGROUND,
-            fg="#d8d8d8",
-            insertbackground="#56f4ee",
-            selectbackground="#143c3d",
-            selectforeground="#ffffff",
+            bg=self._theme_color(PANEL_BACKGROUND),
+            fg=self._theme_color("#d8d8d8"),
+            insertbackground=self._theme_color("#56f4ee"),
+            selectbackground=self._theme_color("#143c3d"),
+            selectforeground=self._theme_color("#ffffff"),
             font=editor_font,
             bd=0,
             highlightthickness=0,
@@ -1193,7 +1290,7 @@ class EditorApp:
         line_numbers = self.layout["line_numbers"]
         self.line_numbers = tk.Canvas(
             self.root,
-            bg=PANEL_LINES_BACKGROUND,
+            bg=self._theme_color(PANEL_LINES_BACKGROUND),
             bd=0,
             highlightthickness=0,
             relief="flat",
@@ -1216,7 +1313,7 @@ class EditorApp:
         scrollbar = self.layout["editor_scrollbar"]
         self.editor_scrollbar = tk.Canvas(
             self.root,
-            bg=PANEL_BACKGROUND,
+            bg=self._theme_color(PANEL_BACKGROUND),
             bd=0,
             highlightthickness=0,
             relief="flat",
@@ -1244,7 +1341,7 @@ class EditorApp:
         h_scrollbar = self.layout["editor_h_scrollbar"]
         self.editor_h_scrollbar = tk.Canvas(
             self.root,
-            bg=PANEL_BACKGROUND,
+            bg=self._theme_color(PANEL_BACKGROUND),
             bd=0,
             highlightthickness=0,
             relief="flat",
@@ -1272,27 +1369,31 @@ class EditorApp:
         self.file_tree.bind("<Return>", self._open_selected_file)
         self.file_tree.bind("<Motion>", self._handle_file_tree_hover)
         self.file_tree.bind("<Leave>", self._clear_file_tree_hover)
-        self.file_tree.tag_configure("hover", background="#143c3d", foreground="#56f4ee")
+        self.file_tree.tag_configure("hover", background=self._theme_color("#143c3d"), foreground=self._theme_color("#56f4ee"))
         self.canvas.create_window(files["x"], files["y"], anchor="nw", window=self.file_tree, width=files["width"], height=files["height"])
 
         status = self.layout["status"]
-        self.mode_id = self.canvas.create_text(status["mode_x"], status["mode_y"], anchor="nw", text="", fill="#d7d9d7", font=("Segoe UI", 7))
-        self.cursor_id = self.canvas.create_text(status["cursor_x"], status["cursor_y"], anchor="nw", text="", fill="#7a8481", font=("Segoe UI", 7))
+        self.mode_id = self.canvas.create_text(status["mode_x"], status["mode_y"], anchor="nw", text="", fill=self._theme_color("#d7d9d7"), font=("Segoe UI", 7))
+        self.cursor_id = self.canvas.create_text(status["cursor_x"], status["cursor_y"], anchor="nw", text="", fill=self._theme_color("#7a8481"), font=("Segoe UI", 7))
 
     def _build_popup_menus(self):
         self.popup_menus = {}
 
         project_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        menu_bg = self._theme_color("#111111")
+        menu_fg = self._theme_color("#d8d8d8")
+        menu_active_bg = self._theme_color("#143c3d")
+        menu_active_fg = self._theme_color("#56f4ee")
+        project_menu.configure(bg=menu_bg, fg=menu_fg, activebackground=menu_active_bg, activeforeground=menu_active_fg)
         project_menu.add_command(label="Create Project", command=self.create_mod_project)
         project_menu.add_command(label="Create Project File", command=self.create_project_text_file)
         project_menu.add_command(label="LMR Bundle Extractor", command=self.open_lmr_bundle_extractor)
-        project_menu.add_command(label="Open Launcher Code in MSVS", command=self.open_launcher_code_in_msvs)
         project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
         self.popup_menus["Project"] = project_menu
 
-        file_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
+        file_menu = tk.Menu(self.root, tearoff=False, bg=menu_bg, fg=menu_fg, activebackground=menu_active_bg, activeforeground=menu_active_fg, bd=0)
         file_menu.add_command(label="Save", command=self.save_current_file)
         file_menu.add_command(label="Export ZIP", command=self.export_zip)
         file_menu.add_separator()
@@ -1328,7 +1429,7 @@ class EditorApp:
         menu.add_command(label="Add entryPoint", command=self.add_lmr_entry_point)
         menu.add_command(label="Add variable", command=self.add_lmr_variable)
         return menu
-
+    
     def _render_top_menu_buttons(self):
         if self.canvas is None:
             return
@@ -1347,27 +1448,29 @@ class EditorApp:
             self.top_menu_item_ids.append(self._create_text_button(menu["resource_manager_x"], menu["y"], "LMR Resource Manager", self.open_settings_window))
 
     def _create_text_button(self, x, y, text, command):
-        item = self.canvas.create_text(x, y, anchor="nw", text=text, fill="#d3d7d5", font=("Segoe UI", 9), tags=(f"button_{text}",))
+        idle_fill = self._theme_color("#d3d7d5")
+        hover_fill = self._theme_color("#56f4ee")
+        item = self.canvas.create_text(x, y, anchor="nw", text=text, fill=idle_fill, font=("Segoe UI", 9), tags=(f"button_{text}",))
         if text == "Settings":
             self.canvas.tag_bind(item, "<Button-1>", lambda _event, callback=command: callback())
         else:
             self.canvas.tag_bind(item, "<Button-1>", lambda event, label=text, fallback=command: self._show_top_menu(event, label, fallback))
-        self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#56f4ee"))
-        self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill="#d3d7d5"))
+        self.canvas.tag_bind(item, "<Enter>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill=hover_fill))
+        self.canvas.tag_bind(item, "<Leave>", lambda _e, item_id=item: self.canvas.itemconfigure(item_id, fill=idle_fill))
         return item
 
     def _configure_editor_syntax_tags(self):
         if self.editor_text is None:
             return
         tag_colors = {
-            "syntax_comment": "#6a9955",
-            "syntax_string": "#ce9178",
-            "syntax_number": "#b5cea8",
-            "syntax_keyword": "#4fc1ff",
-            "syntax_operator": "#d4d4d4",
-            "syntax_section": "#c586c0",
-            "syntax_boolean": "#569cd6",
-            "syntax_property": "#9cdcfe",
+            "syntax_comment": self._theme_color("#6a9955"),
+            "syntax_string": self._theme_color("#ce9178"),
+            "syntax_number": self._theme_color("#b5cea8"),
+            "syntax_keyword": self._theme_color("#4fc1ff"),
+            "syntax_operator": self._theme_color("#d4d4d4"),
+            "syntax_section": self._theme_color("#c586c0"),
+            "syntax_boolean": self._theme_color("#569cd6"),
+            "syntax_property": self._theme_color("#9cdcfe"),
         }
         for tag_name, color in tag_colors.items():
             self.editor_text.tag_configure(tag_name, foreground=color)
@@ -1925,8 +2028,9 @@ class EditorApp:
             self.canvas.delete(close_tag)
             item_ids.clear()
             left, middle, right = state_assets(state_name)
-            text_color = layout["active_text_color"] if path == self.current_file else layout["inactive_text_color"]
-            item_ids.append(self.canvas.create_rectangle(x, y, x + total_width, y + height, fill=PANEL_BACKGROUND, outline=PANEL_BACKGROUND, tags=(tab_tag,)))
+            text_color = self._theme_color(layout["active_text_color"] if path == self.current_file else layout["inactive_text_color"])
+            themed_panel = self._theme_color(PANEL_BACKGROUND)
+            item_ids.append(self.canvas.create_rectangle(x, y, x + total_width, y + height, fill=themed_panel, outline=themed_panel, tags=(tab_tag,)))
             if left is not None:
                 item_ids.append(self.canvas.create_image(x, y, image=left, anchor="nw", tags=(tab_tag,)))
             if middle is not None:
@@ -2231,148 +2335,6 @@ class EditorApp:
         except OSError as error:
             messagebox.showerror("Open failed", str(error))
 
-    def _find_visual_studio_devenv(self) -> Path | None:
-        vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
-        if vswhere.exists():
-            try:
-                result = subprocess.run(
-                    [
-                        str(vswhere),
-                        "-latest",
-                        "-requires",
-                        "Microsoft.Component.MSBuild",
-                        "-find",
-                        r"Common7\IDE\devenv.exe",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                candidate = result.stdout.strip().splitlines()
-                if candidate:
-                    path = Path(candidate[0].strip())
-                    if path.exists():
-                        return path
-            except OSError:
-                pass
-        search_roots = [
-            Path(r"C:\Program Files\Microsoft Visual Studio"),
-            Path(r"C:\Program Files (x86)\Microsoft Visual Studio"),
-        ]
-        for root in search_roots:
-            if not root.exists():
-                continue
-            for path in sorted(root.rglob("devenv.exe"), reverse=True):
-                if path.exists():
-                    return path
-        return None
-
-    def _build_launcher_pyproj_content(self) -> str:
-        launcher_rel = LAUNCHER_DIR / "launcher.py"
-        build_pack_rel = LAUNCHER_DIR / "build_resource_pack.py"
-        return f"""<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{LAUNCHER_PROJECT_GUID}</ProjectGuid>
-    <ProjectHome>.</ProjectHome>
-    <StartupFile>{launcher_rel.name}</StartupFile>
-    <SearchPath />
-    <WorkingDirectory>.</WorkingDirectory>
-    <OutputPath>.</OutputPath>
-    <Name>Launcher</Name>
-    <RootNamespace>Launcher</RootNamespace>
-    <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <InterpreterId>Global|PythonCore|3.11</InterpreterId>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-    <DebugSymbols>true</DebugSymbols>
-    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <DebugSymbols>false</DebugSymbols>
-    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="{launcher_rel.name}" />
-    <Compile Include="{build_pack_rel.name}" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Launcher.spec" />
-    <Content Include="layout_config.json" />
-    <Content Include="requirements-build.txt" />
-    <Content Include="launcher_state.json" />
-    <Content Include="download_state.json" />
-    <Content Include="update_state.json" />
-    <Content Include="installed_mods.json" />
-    <Content Include="checksums.json" />
-    <Content Include="launcher_secrets.json" />
-    <Content Include="run_launcher_temp.bat" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="assets\\" />
-    <Folder Include="locales\\" />
-    <Folder Include="logs\\" />
-    <Folder Include="download_cache\\" />
-  </ItemGroup>
-  <Import Project="$(MSBuildExtensionsPath32)\\Microsoft\\VisualStudio\\v$(VisualStudioVersion)\\Python Tools\\Microsoft.PythonTools.targets" />
-</Project>
-"""
-
-    def _build_launcher_solution_content(self) -> str:
-        lines = [
-            "Microsoft Visual Studio Solution File, Format Version 12.00",
-            "# Visual Studio Version 17",
-            "VisualStudioVersion = 17.0.31903.59",
-            "MinimumVisualStudioVersion = 10.0.40219.1",
-            f'Project("{LAUNCHER_SOLUTION_GUID}") = "Launcher", "Launcher.pyproj", "{LAUNCHER_PROJECT_GUID}"',
-            "EndProject",
-            "Global",
-            "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution",
-            "\t\tDebug|Any CPU = Debug|Any CPU",
-            "\t\tRelease|Any CPU = Release|Any CPU",
-            "\tEndGlobalSection",
-            "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution",
-            f"\t\t{LAUNCHER_PROJECT_GUID}.Debug|Any CPU.ActiveCfg = Debug|Any CPU",
-            f"\t\t{LAUNCHER_PROJECT_GUID}.Debug|Any CPU.Build.0 = Debug|Any CPU",
-            f"\t\t{LAUNCHER_PROJECT_GUID}.Release|Any CPU.ActiveCfg = Release|Any CPU",
-            f"\t\t{LAUNCHER_PROJECT_GUID}.Release|Any CPU.Build.0 = Release|Any CPU",
-            "\tEndGlobalSection",
-            "\tGlobalSection(SolutionProperties) = preSolution",
-            "\t\tHideSolutionNode = FALSE",
-            "\tEndGlobalSection",
-            "EndGlobal",
-        ]
-        return "\n".join(lines) + "\n"
-
-    def _ensure_launcher_msvs_project(self) -> tuple[bool, str | None]:
-        if not LAUNCHER_DIR.exists():
-            return False, f"Launcher directory was not found:\n{LAUNCHER_DIR}"
-        launcher_py = LAUNCHER_DIR / "launcher.py"
-        if not launcher_py.exists():
-            return False, f"Launcher entry file was not found:\n{launcher_py}"
-        try:
-            LAUNCHER_PROJECT_PATH.write_text(self._build_launcher_pyproj_content(), encoding="utf-8")
-            LAUNCHER_SOLUTION_PATH.write_text(self._build_launcher_solution_content(), encoding="utf-8")
-        except OSError as error:
-            return False, str(error)
-        return True, None
-
-    def open_launcher_code_in_msvs(self):
-        ok, error_message = self._ensure_launcher_msvs_project()
-        if not ok:
-            messagebox.showwarning("Launcher project not available", error_message or "Could not prepare the launcher project.")
-            return
-        devenv = self._find_visual_studio_devenv()
-        if devenv is None:
-            messagebox.showwarning("Visual Studio not found", "Could not find devenv.exe for Microsoft Visual Studio.")
-            return
-        try:
-            subprocess.Popen([str(devenv), str(LAUNCHER_SOLUTION_PATH)], cwd=str(LAUNCHER_DIR))
-        except OSError as error:
-            messagebox.showerror("Open failed", str(error))
-
     def open_settings_window(self):
         if self.settings_window is not None and self.settings_window.winfo_exists():
             try:
@@ -2454,7 +2416,7 @@ class EditorApp:
             layout["title_y"],
             anchor="nw",
             text="Application Settings",
-            fill="#56f4ee",
+            fill=self._theme_color("#56f4ee"),
             font=("Cascadia Mono", 10, "bold"),
         )
         self.settings_canvas.tag_bind(title_item, "<ButtonPress-1>", self._start_settings_drag)
@@ -2464,6 +2426,7 @@ class EditorApp:
         self.settings_vars["discord_rpc_enabled"] = tk.BooleanVar(value=self.app_settings["discord_rpc_enabled"])
         self.settings_vars["default_lmr_game_dir"] = tk.StringVar(value=self.app_settings.get("default_lmr_game_dir", ""))
         self.settings_vars["default_es_game_dir"] = tk.StringVar(value=self.app_settings.get("default_es_game_dir", ""))
+        self.settings_vars["theme"] = tk.StringVar(value=self._current_theme())
 
         tabs = [
             ("Info", self._render_info_settings_tab),
@@ -2475,7 +2438,7 @@ class EditorApp:
         for index, (label, callback) in enumerate(tabs):
             tab_y = layout["tabs_y"] + index * layout["tab_step_y"]
             icon_item = self.settings_canvas.create_image(layout["tabs_x"], tab_y + 2, anchor="nw", image=self.assets.get("checkbox_off.png"))
-            text_item = self.settings_canvas.create_text(layout["tabs_x"] + 28, tab_y, anchor="nw", text=label, fill="#f0f0f0", font=("Cascadia Mono", 10, "bold"))
+            text_item = self.settings_canvas.create_text(layout["tabs_x"] + 28, tab_y, anchor="nw", text=label, fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 10, "bold"))
             self.settings_tab_items[label] = {"icon": icon_item, "text": text_item, "callback": callback}
             for item_id in (icon_item, text_item):
                 self.settings_canvas.tag_bind(item_id, "<Button-1>", lambda _e, name=label: self._select_settings_tab(name))
@@ -2558,7 +2521,7 @@ class EditorApp:
 
     def _render_text_block(self, lines, rel_x, rel_y, font=("Cascadia Mono", 9, "bold"), fill="#f0f0f0", anchor="nw", justify="left"):
         x, y = self._content_anchor(rel_x, rel_y)
-        item = self.settings_canvas.create_text(x, y, text="\n".join(lines), anchor=anchor, fill=fill, font=font, justify=justify)
+        item = self.settings_canvas.create_text(x, y, text="\n".join(lines), anchor=anchor, fill=self._theme_color(fill), font=font, justify=justify)
         self.settings_content_items.append(item)
         return item
 
@@ -2613,10 +2576,31 @@ class EditorApp:
         self._render_action_button("reload_layout", "Reload Layout", 0, 112, self._reload_layout)
 
     def _render_preferences_settings_tab(self):
-        self._render_settings_path_row(0, 24, "Default LMR Game Folder", self.settings_vars["default_lmr_game_dir"], "Select default Love, Money, Rock'n'Roll folder")
-        self._render_settings_path_row(0, 84, "Default ES Game Folder", self.settings_vars["default_es_game_dir"], "Select default Everlasting Summer folder")
-        self._render_action_button("save_settings", "Save Settings", 0, 144, self._save_settings)
-        self._render_action_button("open_app_settings", "Open App Settings", 0, 184, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
+        self._render_theme_row(0, 24)
+        self._render_settings_path_row(0, 84, "Default LMR Game Folder", self.settings_vars["default_lmr_game_dir"], "Select default Love, Money, Rock'n'Roll folder")
+        self._render_settings_path_row(0, 144, "Default ES Game Folder", self.settings_vars["default_es_game_dir"], "Select default Everlasting Summer folder")
+        self._render_action_button("save_settings", "Save Settings", 0, 204, self._save_settings)
+        self._render_action_button("open_app_settings", "Open App Settings", 0, 244, lambda: self._open_path_in_system(APP_SETTINGS_PATH))
+
+    def _render_theme_row(self, rel_x, rel_y):
+        x, y = self._content_anchor(rel_x, rel_y)
+        label_item = self.settings_canvas.create_text(
+            x,
+            y,
+            text="Theme",
+            anchor="nw",
+            fill=self._theme_color("#f0f0f0"),
+            font=("Cascadia Mono", 9, "bold"),
+        )
+        self.settings_content_items.append(label_item)
+        theme_value = str(self.settings_vars["theme"].get()).lower()
+        theme_label = "Theme: Light" if theme_value == "light" else "Theme: Dark"
+
+        def toggle_theme():
+            self.settings_vars["theme"].set("light" if str(self.settings_vars["theme"].get()).lower() == "dark" else "dark")
+            self._select_settings_tab("Preferences")
+
+        self._render_action_button("save_settings", theme_label, rel_x, rel_y + 24, toggle_theme)
 
     def _render_reset_settings_tab(self):
         self._render_action_button("reset_layout", "Reset Layout To Defaults", 0, 24, self._reset_layout_to_defaults)
@@ -2626,7 +2610,7 @@ class EditorApp:
         x, y = self._content_anchor(rel_x, rel_y)
         icon_name = "checkbox_on.png" if variable.get() else "checkbox_off.png"
         icon_item = self.settings_canvas.create_image(x, y, image=self.assets.get(icon_name), anchor="nw")
-        text_item = self.settings_canvas.create_text(x + 28, y + 1, text=label, anchor="nw", fill="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        text_item = self.settings_canvas.create_text(x + 28, y + 1, text=label, anchor="nw", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"))
         self.settings_content_items.extend([icon_item, text_item])
 
         def toggle(_event=None):
@@ -2662,19 +2646,19 @@ class EditorApp:
 
     def _render_settings_path_row(self, rel_x, rel_y, label, variable, browse_title):
         x, y = self._content_anchor(rel_x, rel_y)
-        label_item = self.settings_canvas.create_text(x, y, text=label, anchor="nw", fill="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        label_item = self.settings_canvas.create_text(x, y, text=label, anchor="nw", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"))
         self.settings_content_items.append(label_item)
 
         entry = tk.Entry(
             self.settings_window,
             textvariable=variable,
             font=("Cascadia Mono", 8),
-            bg="#101010",
-            fg="#f0f0f0",
-            insertbackground="#56f4ee",
+            bg=self._theme_color("#101010"),
+            fg=self._theme_color("#f0f0f0"),
+            insertbackground=self._theme_color("#56f4ee"),
             bd=0,
             highlightthickness=1,
-            highlightbackground="#1d1d1d",
+            highlightbackground=self._theme_color("#1d1d1d"),
         )
         entry_item = self.settings_canvas.create_window(x, y + 24, anchor="nw", window=entry, width=186, height=24)
         self.settings_action_widgets.append(entry)
@@ -2809,11 +2793,19 @@ class EditorApp:
         self.app_settings = load_app_settings()
         self.settings_vars["auto_reload_layout"].set(self.app_settings["auto_reload_layout"])
         self.settings_vars["discord_rpc_enabled"].set(self.app_settings["discord_rpc_enabled"])
+        self.settings_vars["default_lmr_game_dir"].set(self.app_settings.get("default_lmr_game_dir", ""))
+        self.settings_vars["default_es_game_dir"].set(self.app_settings.get("default_es_game_dir", ""))
+        self.settings_vars["theme"].set(self.app_settings.get("theme", "dark"))
         APP_SETTINGS_PATH.write_text(json.dumps(self.app_settings, indent=2), encoding="utf-8")
 
     def _save_settings(self):
+        previous_theme = self._current_theme()
         self.app_settings["auto_reload_layout"] = bool(self.settings_vars["auto_reload_layout"].get())
         self.app_settings["discord_rpc_enabled"] = bool(self.settings_vars["discord_rpc_enabled"].get())
+        self.app_settings["default_lmr_game_dir"] = str(self.settings_vars["default_lmr_game_dir"].get()).strip()
+        self.app_settings["default_es_game_dir"] = str(self.settings_vars["default_es_game_dir"].get()).strip()
+        selected_theme = str(self.settings_vars["theme"].get()).lower()
+        self.app_settings["theme"] = selected_theme if selected_theme in SUPPORTED_THEMES else "dark"
         APP_SETTINGS_PATH.write_text(json.dumps(self.app_settings, indent=2), encoding="utf-8")
         self.discord.enabled = self.app_settings["discord_rpc_enabled"]
         if not self.discord.enabled:
@@ -2822,7 +2814,10 @@ class EditorApp:
             self.discord.rpc = None
         else:
             self._update_presence()
+        theme_changed = previous_theme != self._current_theme()
         self.close_settings_window()
+        if theme_changed:
+            self._rebuild_ui_for_theme()
 
     def close_settings_window(self):
         if self.settings_window is not None and self.settings_window.winfo_exists():
@@ -3507,7 +3502,7 @@ class EditorApp:
         canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         canvas.pack()
         self._draw_window_frame(canvas, width, height)
-        canvas.create_text(width // 2, 16, text="LMR Bundle Viewer", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        canvas.create_text(width // 2, 16, text="LMR Bundle Viewer", anchor="n", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 12, "bold"))
         drag_zone = canvas.create_rectangle(18, 10, width - 18, 42, outline="", fill="")
 
         drag_state = {"x": 0, "y": 0}
@@ -3530,7 +3525,7 @@ class EditorApp:
         self.asset_viewer_type_var.trace_add("write", self._filter_asset_viewer_entries)
         self.asset_viewer_audio_info_var = tk.StringVar(value="Audio: not available")
 
-        search_entry = tk.Entry(window, textvariable=self.asset_viewer_search_var, font=("Cascadia Mono", 9), bg="#101010", fg="#f0f0f0", insertbackground="#56f4ee", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+        search_entry = tk.Entry(window, textvariable=self.asset_viewer_search_var, font=("Cascadia Mono", 9), bg=self._theme_color("#101010"), fg=self._theme_color("#f0f0f0"), insertbackground=self._theme_color("#56f4ee"), bd=0, highlightthickness=1, highlightbackground=self._theme_color("#1d1d1d"))
         canvas.create_window(24, 54, anchor="nw", window=search_entry, width=430, height=24)
 
         type_combo = ttk.Combobox(window, textvariable=self.asset_viewer_type_var, values=["All", "Images", "Audio"], state="readonly")
@@ -3553,11 +3548,11 @@ class EditorApp:
         canvas.create_window(24, 88, anchor="nw", window=tree, width=660, height=610)
         self.asset_viewer_tree = tree
 
-        preview_frame = tk.Frame(window, bg="#101010", bd=0, highlightthickness=1, highlightbackground="#1d1d1d")
+        preview_frame = tk.Frame(window, bg=self._theme_color("#101010"), bd=0, highlightthickness=1, highlightbackground=self._theme_color("#1d1d1d"))
         canvas.create_window(708, 88, anchor="nw", window=preview_frame, width=388, height=540)
-        self.asset_viewer_preview_label = tk.Label(preview_frame, bg="#101010", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), justify="left", anchor="n", compound="top", wraplength=360)
+        self.asset_viewer_preview_label = tk.Label(preview_frame, bg=self._theme_color("#101010"), fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"), justify="left", anchor="n", compound="top", wraplength=360)
         self.asset_viewer_preview_label.place(x=12, y=12, width=364, height=504)
-        audio_info = tk.Label(window, textvariable=self.asset_viewer_audio_info_var, bg=TRANSPARENT_COLOR, fg="#56f4ee", font=("Cascadia Mono", 8, "bold"), anchor="w", justify="left")
+        audio_info = tk.Label(window, textvariable=self.asset_viewer_audio_info_var, bg=TRANSPARENT_COLOR, fg=self._theme_color("#56f4ee"), font=("Cascadia Mono", 8, "bold"), anchor="w", justify="left")
         canvas.create_window(708, 612, anchor="nw", window=audio_info, width=320, height=20)
 
         self._filter_asset_viewer_entries()
@@ -3754,13 +3749,13 @@ class EditorApp:
         progress_window.title("LMR Bundle Extractor")
         progress_window.resizable(False, False)
         progress_window.geometry(f"420x120+{self.root.winfo_x() + 180}+{self.root.winfo_y() + 140}")
-        progress_window.configure(bg="#111111")
+        progress_window.configure(bg=self._theme_color("#111111"))
         progress_window.protocol("WM_DELETE_WINDOW", progress_window.destroy)
 
-        title_label = tk.Label(progress_window, text="Extracting bundle assets...", font=("Cascadia Mono", 11, "bold"), fg="#56f4ee", bg="#111111")
+        title_label = tk.Label(progress_window, text="Extracting bundle assets...", font=("Cascadia Mono", 11, "bold"), fg=self._theme_color("#56f4ee"), bg=self._theme_color("#111111"))
         title_label.pack(pady=(18, 10))
         status_var = tk.StringVar(value="Preparing...")
-        status_label = tk.Label(progress_window, textvariable=status_var, font=("Cascadia Mono", 9), fg="#f0f0f0", bg="#111111", wraplength=380, justify="center")
+        status_label = tk.Label(progress_window, textvariable=status_var, font=("Cascadia Mono", 9), fg=self._theme_color("#f0f0f0"), bg=self._theme_color("#111111"), wraplength=380, justify="center")
         status_label.pack(padx=20)
 
         result_queue = queue.Queue()
@@ -3976,13 +3971,13 @@ class EditorApp:
 
     def _create_lmr_text_label(self, window, text: str, x: int, y: int, bold: bool = True, color: str = "#f0f0f0"):
         parent = self._get_lmr_dialog_content(window)
-        label = tk.Label(parent, text=text, bg="#111111", fg=color, font=("Cascadia Mono", 9, "bold" if bold else "normal"))
+        label = tk.Label(parent, text=text, bg=self._theme_color("#111111"), fg=self._theme_color(color), font=("Cascadia Mono", 9, "bold" if bold else "normal"))
         label.place(x=x, y=y)
         return label
 
     def _create_lmr_input_shell(self, window, x: int, y: int, width: int, height: int = 24, opened: bool = False):
         parent = self._get_lmr_dialog_content(window)
-        shell = tk.Canvas(parent, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        shell = tk.Canvas(parent, width=width, height=height, bg=self._theme_color("#111111"), highlightthickness=0, bd=0)
         shell.place(x=x, y=y, width=width, height=height)
         shell._lmr_shell_x = x  # type: ignore[attr-defined]
         shell._lmr_shell_y = y  # type: ignore[attr-defined]
@@ -4017,12 +4012,12 @@ class EditorApp:
             bd=1,
             highlightthickness=1,
             relief="flat",
-            bg="#0b0b0b",
-            fg="#f5f5f5",
-            readonlybackground="#0b0b0b",
-            highlightbackground="#56f4ee",
-            highlightcolor="#56f4ee",
-            insertbackground="#56f4ee",
+            bg=self._theme_color("#0b0b0b"),
+            fg=self._theme_color("#f5f5f5"),
+            readonlybackground=self._theme_color("#0b0b0b"),
+            highlightbackground=self._theme_color("#56f4ee"),
+            highlightcolor=self._theme_color("#56f4ee"),
+            insertbackground=self._theme_color("#56f4ee"),
             font=("Cascadia Mono", 9),
         )
         if readonly:
@@ -4063,15 +4058,15 @@ class EditorApp:
             shell.create_image(left_width, 0, image=middle, anchor="nw")
         if right is not None:
             shell.create_image(width - right_width, 0, image=right, anchor="nw")
-        shell.create_text(10, height // 2, anchor="w", text=text, fill="#f5f5f5", font=("Cascadia Mono", 9))
+        shell.create_text(10, height // 2, anchor="w", text=text, fill=self._theme_color("#f5f5f5"), font=("Cascadia Mono", 9))
 
     def _create_lmr_asset_checkbox(self, window, variable: tk.BooleanVar, label: str, x: int, y: int):
         parent = self._get_lmr_dialog_content(window)
-        frame = tk.Frame(parent, bg="#111111", bd=0, highlightthickness=0)
+        frame = tk.Frame(parent, bg=self._theme_color("#111111"), bd=0, highlightthickness=0)
         frame.place(x=x, y=y)
-        icon_label = tk.Label(frame, bg="#111111", bd=0, highlightthickness=0)
+        icon_label = tk.Label(frame, bg=self._theme_color("#111111"), bd=0, highlightthickness=0)
         icon_label.pack(side="left")
-        text_label = tk.Label(frame, text=label, bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9))
+        text_label = tk.Label(frame, text=label, bg=self._theme_color("#111111"), fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9))
         text_label.pack(side="left", padx=(6, 0))
         state = {"hovered": False, "disabled": False}
 
@@ -4079,13 +4074,13 @@ class EditorApp:
             checked = bool(variable.get())
             if state["disabled"]:
                 icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
-                text_color = "#6e6e6e"
+                text_color = self._theme_color("#6e6e6e")
             elif state["hovered"]:
                 icon_name = "checkbox_onmouse.png"
-                text_color = "#56f4ee"
+                text_color = self._theme_color("#56f4ee")
             else:
                 icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
-                text_color = "#f0f0f0"
+                text_color = self._theme_color("#f0f0f0")
             icon = self.assets.get(icon_name)
             icon_label.configure(image=icon)
             icon_label.image = icon
@@ -4131,7 +4126,7 @@ class EditorApp:
         popup = tk.Toplevel(window)
         popup.transient(window)
         popup.overrideredirect(True)
-        popup.configure(bg="#111111")
+        popup.configure(bg=self._theme_color("#111111"))
         try:
             popup.wm_attributes("-topmost", True)
         except tk.TclError:
@@ -4141,14 +4136,14 @@ class EditorApp:
         popup_width = max(shell.winfo_width(), 160)
         popup_height = max(24, len(visible_values) * row_height)
         popup.geometry(f"{popup_width}x{popup_height}+{shell.winfo_rootx()}+{shell.winfo_rooty() + shell.winfo_height() + 2}")
-        canvas = tk.Canvas(popup, width=popup_width, height=popup_height, bg="#111111", highlightthickness=0, bd=0)
+        canvas = tk.Canvas(popup, width=popup_width, height=popup_height, bg=self._theme_color("#111111"), highlightthickness=0, bd=0)
         canvas.pack()
         bg_mid = self._load_asset_exact("listbox_list_mid.png", popup_width, popup_height)
         if bg_mid is not None:
             canvas._popup_images = [bg_mid]  # type: ignore[attr-defined]
             canvas.create_image(0, 0, image=bg_mid, anchor="nw")
         else:
-            canvas.create_rectangle(0, 0, popup_width, popup_height, fill="#161616", outline="")
+            canvas.create_rectangle(0, 0, popup_width, popup_height, fill=self._theme_color("#161616"), outline="")
         sep_img = self._load_asset_exact("listbox_list_separator.png", popup_width, 2)
         if sep_img is not None:
             canvas._popup_images = getattr(canvas, "_popup_images", []) + [sep_img]  # type: ignore[attr-defined]
@@ -4171,11 +4166,11 @@ class EditorApp:
         for index, value in enumerate(visible_values):
             top = index * row_height
             row = canvas.create_rectangle(0, top, popup_width, top + row_height, outline="", fill="")
-            text = canvas.create_text(10, top + row_height // 2, anchor="w", text=value, fill="#f5f5f5", font=("Cascadia Mono", 9))
+            text = canvas.create_text(10, top + row_height // 2, anchor="w", text=value, fill=self._theme_color("#f5f5f5"), font=("Cascadia Mono", 9))
             if sep_img is not None and index < len(visible_values) - 1:
                 canvas.create_image(0, top + row_height - 1, image=sep_img, anchor="nw")
             def on_enter(_e, item=row):
-                canvas.itemconfigure(item, fill="#17484a")
+                canvas.itemconfigure(item, fill=self._theme_color("#17484a"))
             def on_leave(_e, item=row):
                 canvas.itemconfigure(item, fill="")
             def on_click(_e, selected=value):
@@ -4243,11 +4238,11 @@ class EditorApp:
     def _create_lmr_text_preview(self, window, x: int, y: int, width: int, height: int):
         shell = self._create_lmr_input_shell(window, x, y, width, height, opened=False)
         shell.delete("all")
-        shell.create_rectangle(0, 0, width, height, fill="#151515", outline="#222222")
+        shell.create_rectangle(0, 0, width, height, fill=self._theme_color("#151515"), outline=self._theme_color("#222222"))
         return shell
 
     def _draw_lmr_dialog_background(self, canvas, width, height):
-        canvas.create_rectangle(0, 0, width, height, fill="#111111", outline="#2a2a2a", width=1)
+        canvas.create_rectangle(0, 0, width, height, fill=self._theme_color("#111111"), outline=self._theme_color("#2a2a2a"), width=1)
 
     def _get_lmr_dialog_target_size(self, window):
         provider = getattr(window, "_lmr_size_provider", None)
@@ -4280,7 +4275,7 @@ class EditorApp:
                 canvas.configure(width=width, height=height)
                 canvas.delete("all")
                 self._draw_lmr_dialog_background(canvas, width, height)
-                canvas.create_text(cfg["title_x"], cfg["title_y"], text=getattr(window, "_dialog_title", "LMR Resource Manager"), anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 11, "bold"))
+                canvas.create_text(cfg["title_x"], cfg["title_y"], text=getattr(window, "_dialog_title", "LMR Resource Manager"), anchor="n", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 11, "bold"))
                 drag_zone = canvas.create_rectangle(cfg["drag_x"], cfg["drag_y"], cfg["drag_x"] + cfg["drag_width"], cfg["drag_y"] + cfg["drag_height"], outline="", fill="")
                 drag_state = {"x": 0, "y": 0}
                 def start_drag(event):
@@ -4307,7 +4302,7 @@ class EditorApp:
         height = int(height if height is not None else cfg["height"])
         window = tk.Toplevel(self.root)
         window.transient(self.root)
-        window.configure(bg="#111111")
+        window.configure(bg=self._theme_color("#111111"))
         window.overrideredirect(True)
         try:
             window.wm_attributes("-topmost", True)
@@ -4316,10 +4311,10 @@ class EditorApp:
         window.geometry(f"{width}x{height}+{self.root.winfo_x() + cfg['offset_x']}+{self.root.winfo_y() + cfg['offset_y']}")
         window.resizable(False, False)
 
-        canvas = tk.Canvas(window, width=width, height=height, bg="#111111", highlightthickness=0, bd=0)
+        canvas = tk.Canvas(window, width=width, height=height, bg=self._theme_color("#111111"), highlightthickness=0, bd=0)
         canvas.pack()
         self._draw_lmr_dialog_background(canvas, width, height)
-        canvas.create_text(cfg["title_x"], cfg["title_y"], text=title, anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 11, "bold"))
+        canvas.create_text(cfg["title_x"], cfg["title_y"], text=title, anchor="n", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 11, "bold"))
 
         drag_zone = canvas.create_rectangle(cfg["drag_x"], cfg["drag_y"], cfg["drag_x"] + cfg["drag_width"], cfg["drag_y"] + cfg["drag_height"], outline="", fill="")
         drag_state = {"x": 0, "y": 0}
@@ -4946,7 +4941,7 @@ class EditorApp:
         visual_cfg = self.layout[layout_key]
         window = self._open_lmr_basic_dialog(title, width=visual_cfg["width"], height=visual_cfg["height"])
         preview_shell = self._create_lmr_text_preview(window, visual_cfg["preview_x"], visual_cfg["preview_y"], visual_cfg["preview_width"], visual_cfg["preview_height"])
-        preview_label = tk.Label(preview_shell, text="Preview unavailable", bg="#151515", fg="#8d9895")
+        preview_label = tk.Label(preview_shell, text="Preview unavailable", bg=self._theme_color("#151515"), fg=self._theme_color("#8d9895"))
         preview_window_item = preview_shell.create_window(visual_cfg["preview_width"] // 2, visual_cfg["preview_height"] // 2, anchor="center", window=preview_label, width=visual_cfg["preview_width"] - 16, height=visual_cfg["preview_height"] - 16)
 
         technical_label = self._create_lmr_text_label(window, "Technical Name", visual_cfg["technical_label_x"], visual_cfg["technical_label_y"])
@@ -4959,7 +4954,7 @@ class EditorApp:
         source_type_shell, _ = self._create_lmr_combobox(window, mode_var, (["image", "prefab"] if allow_prefab else ["image"]), visual_cfg["source_type_x"], visual_cfg["source_type_y"], visual_cfg["source_type_width"])
 
         parent = self._get_lmr_dialog_content(window)
-        static_label = tk.Label(parent, text="Static / Main File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+        static_label = tk.Label(parent, text="Static / Main File", bg=self._theme_color("#111111"), fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"))
         static_label.place(x=visual_cfg["static_label_x"], y=visual_cfg["static_label_y"])
         static_entry, _ = self._create_lmr_text_entry(window, static_var, visual_cfg["static_entry_x"], visual_cfg["static_entry_y"], visual_cfg["static_entry_width"])
         static_browse_widget, _ = self._create_lmr_dialog_button(window, "Browse", visual_cfg["static_browse_x"], visual_cfg["static_browse_y"], lambda: self._choose_visual_asset_file(window, mode_var.get(), static_var, preview_label), middle_width=visual_cfg["static_browse_width"])
@@ -4968,7 +4963,7 @@ class EditorApp:
         anim_widgets = []
         if allow_animation:
             animated_check = self._create_lmr_asset_checkbox(window, animated_var, "Animated", visual_cfg["animated_x"], visual_cfg["animated_y"])
-            anim_label = tk.Label(parent, text="Anim File", bg="#111111", fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"))
+            anim_label = tk.Label(parent, text="Anim File", bg=self._theme_color("#111111"), fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"))
             anim_entry, anim_shell = self._create_lmr_text_entry(window, anim_var, visual_cfg["anim_entry_x"], visual_cfg["anim_entry_y"], visual_cfg["anim_entry_width"])
             anim_button_widget, anim_button_item = self._create_lmr_dialog_button(window, "Browse", visual_cfg["anim_browse_x"], visual_cfg["anim_browse_y"], lambda: self._choose_visual_asset_file(window, mode_var.get(), anim_var, None), middle_width=visual_cfg["anim_browse_width"])
             anim_widgets = [anim_label, anim_entry, anim_shell, anim_button_widget, anim_button_item]
@@ -4982,7 +4977,7 @@ class EditorApp:
                 animated_check["set_disabled"](is_prefab)
             show_anim = allow_animation and animated_var.get() and not is_prefab
             if len(anim_widgets) >= 5:
-                anim_widgets[0].configure(fg=("#f0f0f0" if show_anim else "#666666"))
+                anim_widgets[0].configure(fg=(self._theme_color("#f0f0f0") if show_anim else self._theme_color("#666666")))
                 anim_widgets[1].configure(state=("normal" if show_anim else "disabled"))
                 anim_widgets[3].configure(state=("normal" if show_anim else "disabled"))
                 canvas = getattr(window, "_dialog_canvas", None)
@@ -5060,7 +5055,7 @@ class EditorApp:
             preview_shell.place_configure(x=cfg["preview_x"], y=cfg["preview_y"], width=cfg["preview_width"], height=cfg["preview_height"])
             preview_shell.configure(width=cfg["preview_width"], height=cfg["preview_height"])
             preview_shell.delete("all")
-            preview_shell.create_rectangle(0, 0, cfg["preview_width"], cfg["preview_height"], fill="#151515", outline="#222222")
+            preview_shell.create_rectangle(0, 0, cfg["preview_width"], cfg["preview_height"], fill=self._theme_color("#151515"), outline=self._theme_color("#222222"))
             preview_shell.create_window(cfg["preview_width"] // 2, cfg["preview_height"] // 2, anchor="center", window=preview_label, width=cfg["preview_width"] - 16, height=cfg["preview_height"] - 16)
             if animated_check is not None:
                 animated_check["frame"].place_configure(x=cfg["animated_x"], y=cfg["animated_y"])
@@ -5236,7 +5231,7 @@ class EditorApp:
         canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         canvas.pack()
         self._draw_window_frame(canvas, width, height)
-        canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project File", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project File", anchor="n", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 12, "bold"))
 
         initial_state = initial_state or {}
         kind_var = tk.StringVar(value=str(initial_state.get("kind", "scenario_txt" if project_type == "lmr" else "rpy_script")))
@@ -5244,11 +5239,11 @@ class EditorApp:
         folder_var = tk.StringVar(value=str(initial_state.get("folder", "")))
         technical_name_var = tk.StringVar(value=str(initial_state.get("technical_name", "")))
 
-        panel_bg = "#101010"
-        panel_border = "#1d1d1d"
+        panel_bg = self._theme_color("#101010")
+        panel_border = self._theme_color("#1d1d1d")
 
         def add_label(x, y, text, color="#f0f0f0"):
-            canvas.create_text(x, y, text=text, anchor="nw", fill=color, font=("Cascadia Mono", 9, "bold"))
+            canvas.create_text(x, y, text=text, anchor="nw", fill=self._theme_color(color), font=("Cascadia Mono", 9, "bold"))
 
         def add_entry(x, y, width_px, variable):
             entry = tk.Entry(
@@ -5256,8 +5251,8 @@ class EditorApp:
                 textvariable=variable,
                 font=("Cascadia Mono", 9),
                 bg=panel_bg,
-                fg="#f0f0f0",
-                insertbackground="#56f4ee",
+                fg=self._theme_color("#f0f0f0"),
+                insertbackground=self._theme_color("#56f4ee"),
                 bd=0,
                 highlightthickness=1,
                 highlightbackground=panel_border,
@@ -5270,7 +5265,7 @@ class EditorApp:
         def create_asset_toggle(x, y, label, variable, value, width_px=220):
             frame = tk.Frame(window, bg=panel_bg, bd=0, highlightthickness=0)
             frame.place(x=x, y=y, width=width_px, height=22)
-            text_label = tk.Label(frame, text=label, bg=panel_bg, fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
+            text_label = tk.Label(frame, text=label, bg=panel_bg, fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
             text_label.place(x=0, y=0, width=width_px - 28, height=22)
             icon_label = tk.Label(frame, bg=panel_bg, bd=0, highlightthickness=0)
             icon_label.place(x=width_px - 18, y=2, width=18, height=18)
@@ -5279,7 +5274,7 @@ class EditorApp:
             def refresh():
                 checked = variable.get() == value
                 icon_name = "checkbox_onmouse.png" if state["hovered"] else ("checkbox_on.png" if checked else "checkbox_off.png")
-                text_label.configure(fg="#56f4ee" if state["hovered"] else "#f0f0f0")
+                text_label.configure(fg=self._theme_color("#56f4ee") if state["hovered"] else self._theme_color("#f0f0f0"))
                 icon = self.assets.get(icon_name)
                 icon_label.configure(image=icon)
                 icon_label.image = icon
@@ -5323,16 +5318,16 @@ class EditorApp:
         folder_entry = None
         folder_note = None
         if project_type == "lmr":
-            technical_name_label = canvas.create_text(cfg["technical_label_x"], cfg["technical_label_y"], text="Technical Name", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+            technical_name_label = canvas.create_text(cfg["technical_label_x"], cfg["technical_label_y"], text="Technical Name", anchor="nw", fill=self._theme_color("#56f4ee"), font=("Cascadia Mono", 9, "bold"))
             technical_name_entry = add_entry(cfg["technical_entry_x"], cfg["technical_entry_y"], cfg["technical_entry_width"], technical_name_var)
-            folder_label = canvas.create_text(cfg["folder_label_x"], cfg["folder_label_y"], text="Scenario Folder (optional)", anchor="nw", fill="#56f4ee", font=("Cascadia Mono", 9, "bold"))
+            folder_label = canvas.create_text(cfg["folder_label_x"], cfg["folder_label_y"], text="Scenario Folder (optional)", anchor="nw", fill=self._theme_color("#56f4ee"), font=("Cascadia Mono", 9, "bold"))
             folder_entry = add_entry(cfg["folder_entry_x"], cfg["folder_entry_y"], cfg["folder_entry_width"], folder_var)
             folder_note = canvas.create_text(
                 cfg["folder_note_x"],
                 cfg["folder_note_y"],
                 text="Leave empty to create file in project root.",
                 anchor="nw",
-                fill="#9aa0a0",
+                fill=self._theme_color("#9aa0a0"),
                 font=("Cascadia Mono", 8, "bold"),
             )
 
@@ -5499,7 +5494,7 @@ class EditorApp:
         canvas = tk.Canvas(window, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         canvas.pack()
         self._draw_window_frame(canvas, width, height)
-        canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project", anchor="n", fill="#f0f0f0", font=("Cascadia Mono", 12, "bold"))
+        canvas.create_text(cfg["title_x"], cfg["title_y"], text="Create Project", anchor="n", fill=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 12, "bold"))
 
         def run_project_dialog(callback):
             try:
@@ -5522,8 +5517,8 @@ class EditorApp:
         def show_project_warning(title, message):
             return run_project_dialog(lambda: messagebox.showwarning(title, message, parent=window))
 
-        panel_bg = "#101010"
-        panel_border = "#1d1d1d"
+        panel_bg = self._theme_color("#101010")
+        panel_border = self._theme_color("#1d1d1d")
         initial_state = initial_state or {}
         game_var = tk.StringVar(value=str(initial_state.get("game", "lmr")))
         panel_var = tk.StringVar(value=str(initial_state.get("panel", "general")))
@@ -5549,8 +5544,8 @@ class EditorApp:
             height=4,
             font=("Cascadia Mono", 9),
             bg=panel_bg,
-            fg="#f0f0f0",
-            insertbackground="#56f4ee",
+            fg=self._theme_color("#f0f0f0"),
+            insertbackground=self._theme_color("#56f4ee"),
             bd=0,
             highlightthickness=1,
             highlightbackground=panel_border,
@@ -5585,15 +5580,15 @@ class EditorApp:
         }
 
         def add_canvas_label(x, y, text, color="#f0f0f0", anchor="nw"):
-            canvas.create_text(x, y, text=text, anchor=anchor, fill=color, font=("Cascadia Mono", 9, "bold"))
+            canvas.create_text(x, y, text=text, anchor=anchor, fill=self._theme_color(color), font=("Cascadia Mono", 9, "bold"))
 
         def add_panel_label(parent, x, y, text, color="#f0f0f0"):
-            label = tk.Label(parent, text=text, bg=panel_bg, fg=color, font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
+            label = tk.Label(parent, text=text, bg=panel_bg, fg=self._theme_color(color), font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
             label.place(x=x, y=y)
             return label
 
         def add_panel_text(parent, x, y, text, color="#9aa0a0", width_px=560):
-            label = tk.Label(parent, text=text, bg=panel_bg, fg=color, font=("Cascadia Mono", 8, "bold"), anchor="nw", justify="left", wraplength=width_px)
+            label = tk.Label(parent, text=text, bg=panel_bg, fg=self._theme_color(color), font=("Cascadia Mono", 8, "bold"), anchor="nw", justify="left", wraplength=width_px)
             label.place(x=x, y=y)
             return label
 
@@ -5603,8 +5598,8 @@ class EditorApp:
                 textvariable=variable,
                 font=("Cascadia Mono", 9),
                 bg=panel_bg,
-                fg="#f0f0f0",
-                insertbackground="#56f4ee",
+                fg=self._theme_color("#f0f0f0"),
+                insertbackground=self._theme_color("#56f4ee"),
                 bd=0,
                 highlightthickness=1,
                 highlightbackground=panel_border,
@@ -5618,7 +5613,7 @@ class EditorApp:
             frame = tk.Frame(parent, bg=panel_bg, bd=0, highlightthickness=0)
             frame.place(x=x, y=y, width=width_px, height=22)
             icon_label = tk.Label(frame, bg=panel_bg, bd=0, highlightthickness=0)
-            text_label = tk.Label(frame, text=label, bg=panel_bg, fg="#f0f0f0", font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
+            text_label = tk.Label(frame, text=label, bg=panel_bg, fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 9, "bold"), anchor="w", justify="left")
             if icon_side == "right":
                 text_label.place(x=0, y=0, width=width_px - 28, height=22)
                 icon_label.place(x=width_px - 18, y=2, width=18, height=18)
@@ -5634,13 +5629,13 @@ class EditorApp:
                 checked = is_checked()
                 if state["disabled"]:
                     icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
-                    text_color = "#6e6e6e"
+                    text_color = self._theme_color("#6e6e6e")
                 elif state["hovered"]:
                     icon_name = "checkbox_onmouse.png"
-                    text_color = "#56f4ee"
+                    text_color = self._theme_color("#56f4ee")
                 else:
                     icon_name = "checkbox_on.png" if checked else "checkbox_off.png"
-                    text_color = "#f0f0f0"
+                    text_color = self._theme_color("#f0f0f0")
                 icon = self.assets.get(icon_name)
                 icon_label.configure(image=icon)
                 icon_label.image = icon
@@ -5742,7 +5737,7 @@ class EditorApp:
         project_id_entry = add_panel_entry(general_frame, general_cfg["project_id_entry_x"], general_cfg["project_id_entry_y"], general_cfg["project_id_entry_width"], project_id_var)
         add_panel_text(general_frame, general_cfg["project_id_hint_x"], general_cfg["project_id_hint_y"], "Allowed: latin, digits and _", "#9aa0a0", 240)
         add_panel_label(general_frame, general_cfg["target_label_x"], general_cfg["target_label_y"], "Target Folder")
-        target_label = tk.Label(general_frame, textvariable=target_path_var, bg=panel_bg, fg="#56f4ee", font=("Cascadia Mono", 8, "bold"), anchor="nw", justify="left", wraplength=560)
+        target_label = tk.Label(general_frame, textvariable=target_path_var, bg=panel_bg, fg=self._theme_color("#56f4ee"), font=("Cascadia Mono", 8, "bold"), anchor="nw", justify="left", wraplength=560)
         target_label.place(x=general_cfg["target_value_x"], y=general_cfg["target_value_y"], width=general_cfg["target_value_width"], height=general_cfg["target_value_height"])
         add_panel_text(general_frame, general_cfg["note_x"], general_cfg["note_y"], "Choose the game first, then fill the game folder and project id.", "#d7d9d7", 560)
 
@@ -6179,7 +6174,7 @@ class EditorApp:
                 y,
                 anchor="ne",
                 text=line_number,
-                fill="#6e6e6e",
+                fill=self._theme_color("#6e6e6e"),
                 font=("Cascadia Mono", 10),
             )
             next_index = self.editor_text.index(f"{index}+1line linestart")
@@ -6217,6 +6212,7 @@ class EditorApp:
     def _update_presence(self):
         project_name = self._get_presence_project_name()
         file_name = self._get_project_game_name()
+        self.discord.set_theme(self._current_theme())
         self.discord.update(project_name, file_name)
 
     def _presence_loop(self):

@@ -2,5 +2,6 @@
   "auto_reload_layout": true,
   "discord_rpc_enabled": true,
   "default_lmr_game_dir": "",
-  "default_es_game_dir": ""
+  "default_es_game_dir": "",
+  "theme": "light"
 }
