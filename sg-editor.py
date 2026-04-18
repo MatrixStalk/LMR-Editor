@@ -4,6 +4,7 @@ import queue
 import re
 import shutil
 import struct
+import subprocess
 import threading
 import time
 import tkinter as tk
@@ -42,6 +43,9 @@ LMR_RESOURCES_ASSETS_PATH = LMR_GAME_DATA_DIR / "resources.assets"
 LMR_RESOURCES_RESS_PATH = LMR_GAME_DATA_DIR / "resources.assets.resS"
 LMR_BUNDLES_DIR = LMR_GAME_DATA_DIR / "StreamingAssets" / "aa" / "StandaloneWindows64"
 LMR_FALLBACK_UNITY_VERSION = "6000.0.59f2"
+LAUNCHER_DIR = BASE_DIR.parent / "launcher"
+LAUNCHER_SOLUTION_PATH = LAUNCHER_DIR / "Launcher.sln"
+LAUNCHER_PROJECT_PATH = LAUNCHER_DIR / "Launcher.pyproj"
 
 BACKGROUND_IMAGE_PATH = ASSETS_DIR / "mb_bg.png"
 TRANSPARENT_COLOR = "#010203"
@@ -1280,6 +1284,7 @@ class EditorApp:
         project_menu.add_command(label="Create Project", command=self.create_mod_project)
         project_menu.add_command(label="Create Project File", command=self.create_project_text_file)
         project_menu.add_command(label="LMR Bundle Extractor", command=self.open_lmr_bundle_extractor)
+        project_menu.add_command(label="Open Launcher Code in MSVS", command=self.open_launcher_code_in_msvs)
         project_menu.add_separator()
         project_menu.add_command(label="Open Project", command=self.open_project)
         project_menu.add_command(label="Reload Files", command=self._reload_project_files)
@@ -1288,6 +1293,7 @@ class EditorApp:
         file_menu = tk.Menu(self.root, tearoff=False, bg="#111111", fg="#d8d8d8", activebackground="#143c3d", activeforeground="#56f4ee", bd=0)
         file_menu.add_command(label="Save", command=self.save_current_file)
         file_menu.add_command(label="Export ZIP", command=self.export_zip)
+        file_menu.add_command(label="Open Launcher Code in MSVS", command=self.open_launcher_code_in_msvs)
         file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
@@ -2221,6 +2227,58 @@ class EditorApp:
             return
         try:
             os.startfile(str(path))
+        except OSError as error:
+            messagebox.showerror("Open failed", str(error))
+
+    def _find_visual_studio_devenv(self) -> Path | None:
+        vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+        if vswhere.exists():
+            try:
+                result = subprocess.run(
+                    [
+                        str(vswhere),
+                        "-latest",
+                        "-requires",
+                        "Microsoft.Component.MSBuild",
+                        "-find",
+                        r"Common7\IDE\devenv.exe",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                candidate = result.stdout.strip().splitlines()
+                if candidate:
+                    path = Path(candidate[0].strip())
+                    if path.exists():
+                        return path
+            except OSError:
+                pass
+        search_roots = [
+            Path(r"C:\Program Files\Microsoft Visual Studio"),
+            Path(r"C:\Program Files (x86)\Microsoft Visual Studio"),
+        ]
+        for root in search_roots:
+            if not root.exists():
+                continue
+            for path in sorted(root.rglob("devenv.exe"), reverse=True):
+                if path.exists():
+                    return path
+        return None
+
+    def open_launcher_code_in_msvs(self):
+        if not LAUNCHER_SOLUTION_PATH.exists() or not LAUNCHER_PROJECT_PATH.exists():
+            messagebox.showwarning(
+                "Launcher project not found",
+                f"MSVS project files were not found:\n{LAUNCHER_SOLUTION_PATH}\n{LAUNCHER_PROJECT_PATH}",
+            )
+            return
+        devenv = self._find_visual_studio_devenv()
+        if devenv is None:
+            messagebox.showwarning("Visual Studio not found", "Could not find devenv.exe for Microsoft Visual Studio.")
+            return
+        try:
+            subprocess.Popen([str(devenv), str(LAUNCHER_SOLUTION_PATH)], cwd=str(LAUNCHER_DIR))
         except OSError as error:
             messagebox.showerror("Open failed", str(error))
 
