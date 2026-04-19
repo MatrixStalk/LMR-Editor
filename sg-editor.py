@@ -2034,7 +2034,7 @@ class EditorApp:
         height = max(1, button_height)
         total_width = left_width + middle_width + right_width
         widget = tk.Canvas(parent_window, width=total_width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
-        widget._state_images = {}  # type: ignore[attr-defined]
+        widget._state_images = {}  
 
         def build_state(state_name: str):
             left = self._load_asset_exact_alpha(f"button_border_left_{state_name}.png", left_width, height, alpha)
@@ -2042,13 +2042,13 @@ class EditorApp:
             right = self._load_asset_exact_alpha(f"button_border_right_{state_name}.png", right_width, height, alpha)
             if left is None or middle is None or right is None:
                 return
-            widget._state_images[state_name] = (left, middle, right)  # type: ignore[attr-defined]
+            widget._state_images[state_name] = (left, middle, right)  
 
         for state in ("idle", "onmouse", "clicked"):
             build_state(state)
 
         def draw_state(state_name: str):
-            state_images = widget._state_images.get(state_name)  # type: ignore[attr-defined]
+            state_images = widget._state_images.get(state_name)  
             if state_images is None:
                 return
             left, middle, right = state_images
@@ -2083,8 +2083,8 @@ class EditorApp:
         if background is not None:
             canvas.create_image(edge, edge, image=background, anchor="nw")
             if not hasattr(canvas, "_frame_images"):
-                canvas._frame_images = []  # type: ignore[attr-defined]
-            canvas._frame_images.append(background)  # type: ignore[attr-defined]
+                canvas._frame_images = []  
+            canvas._frame_images.append(background)  
         else:
             canvas.create_rectangle(edge, edge, width - edge, height - edge, fill="#101010", outline="")
 
@@ -2105,8 +2105,8 @@ class EditorApp:
                 continue
             canvas.create_image(x, y, image=image, anchor="nw")
             if not hasattr(canvas, "_frame_images"):
-                canvas._frame_images = []  # type: ignore[attr-defined]
-            canvas._frame_images.append(image)  # type: ignore[attr-defined]
+                canvas._frame_images = []  
+            canvas._frame_images.append(image)  
 
     def _show_unsaved_warning(self, title: str, message: str) -> bool:
         if self.confirm_window is not None and self.confirm_window.winfo_exists():
@@ -3228,15 +3228,15 @@ class EditorApp:
                 self._mci_send_string(f"close {alias}")
             except Exception:
                 pass
-        window._lmr_audio_alias = ""  # type: ignore[attr-defined]
-        window._lmr_audio_length_ms = 0  # type: ignore[attr-defined]
+        window._lmr_audio_alias = ""  
+        window._lmr_audio_length_ms = 0  
         progress_job = getattr(window, "_lmr_audio_progress_job", None)
         if progress_job is not None:
             try:
                 window.after_cancel(progress_job)
             except tk.TclError:
                 pass
-        window._lmr_audio_progress_job = None  # type: ignore[attr-defined]
+        window._lmr_audio_progress_job = None  
 
     def _format_audio_time(self, milliseconds: int) -> str:
         total_seconds = max(0, int(milliseconds // 1000))
@@ -3257,7 +3257,7 @@ class EditorApp:
 
         unplayed = self._load_asset_exact("trackbar_unplayed_part.png", width, height)
         if unplayed is not None:
-            track_canvas._track_images = [unplayed]  # type: ignore[attr-defined]
+            track_canvas._track_images = [unplayed]  
             track_canvas.create_image(0, 0, image=unplayed, anchor="nw")
         else:
             track_canvas.create_rectangle(0, 0, width, height, fill="#1b1b1b", outline="")
@@ -3266,7 +3266,7 @@ class EditorApp:
         if played_width > 0:
             played = self._load_asset_exact("trackbar.png", played_width, height)
             if played is not None:
-                track_canvas._track_images = getattr(track_canvas, "_track_images", []) + [played]  # type: ignore[attr-defined]
+                track_canvas._track_images = getattr(track_canvas, "_track_images", []) + [played]  
                 track_canvas.create_image(0, 0, image=played, anchor="nw")
 
         thumb_state = "clicked" if getattr(window, "_lmr_audio_track_pressed", False) else ("onmouse" if getattr(window, "_lmr_audio_track_hovered", False) else "idle")
@@ -3279,9 +3279,9 @@ class EditorApp:
         thumb_x = int(round((width - button_size) * fraction))
         thumb_y = max(0, (height - button_size) // 2)
         if thumb is not None:
-            track_canvas._track_images = getattr(track_canvas, "_track_images", []) + [thumb]  # type: ignore[attr-defined]
+            track_canvas._track_images = getattr(track_canvas, "_track_images", []) + [thumb]  
             track_canvas.create_image(thumb_x, thumb_y, image=thumb, anchor="nw")
-        window._lmr_audio_track_fraction = fraction  # type: ignore[attr-defined]
+        window._lmr_audio_track_fraction = fraction  
 
     def _update_lmr_sound_time_label(self, window, position_ms: int, length_ms: int):
         time_var = getattr(window, "_lmr_audio_time_var", None)
@@ -3309,7 +3309,7 @@ class EditorApp:
             self._render_lmr_audio_trackbar(window, 0.0)
             self._update_lmr_sound_time_label(window, 0, length_ms)
             return
-        window._lmr_audio_progress_job = window.after(150, lambda w=window: self._poll_lmr_dialog_audio_progress(w))  # type: ignore[attr-defined]
+        window._lmr_audio_progress_job = window.after(150, lambda w=window: self._poll_lmr_dialog_audio_progress(w))  
 
     def _play_lmr_dialog_audio(self, window, source_path: str):
         source = Path(source_path.strip())
@@ -3350,8 +3350,8 @@ class EditorApp:
             self._close_lmr_dialog_audio(window)
             self._show_lmr_warning("Playback Error", "Could not start audio playback.", window)
             return
-        window._lmr_audio_alias = alias  # type: ignore[attr-defined]
-        window._lmr_audio_length_ms = length_ms  # type: ignore[attr-defined]
+        window._lmr_audio_alias = alias  
+        window._lmr_audio_length_ms = length_ms  
         self._render_lmr_audio_trackbar(window, 0.0)
         self._update_lmr_sound_time_label(window, 0, length_ms)
         self._poll_lmr_dialog_audio_progress(window)
@@ -4084,9 +4084,9 @@ class EditorApp:
             return
         try:
             if window.winfo_exists() and widget.winfo_exists():
-                window._lmr_last_focus_widget = widget  # type: ignore[attr-defined]
+                window._lmr_last_focus_widget = widget  
                 if getattr(window, "_lmr_default_focus_widget", None) is None:
-                    window._lmr_default_focus_widget = widget  # type: ignore[attr-defined]
+                    window._lmr_default_focus_widget = widget  
         except tk.TclError:
             return
 
@@ -4115,16 +4115,16 @@ class EditorApp:
         width = middle_width if middle_width is not None else cfg["button_width"]
         widget, window_item = self._create_composite_button(window, canvas, x, y, label, width, cfg["button_height"], action)
         if widget is not None:
-            widget._lmr_button_x = x  # type: ignore[attr-defined]
-            widget._lmr_button_y = y  # type: ignore[attr-defined]
-            widget._lmr_button_middle_width = width  # type: ignore[attr-defined]
-            widget._lmr_button_width = self._compute_lmr_button_total_width(width, cfg["button_height"])  # type: ignore[attr-defined]
-            widget._lmr_button_height = cfg["button_height"]  # type: ignore[attr-defined]
-            widget._lmr_button_item = window_item  # type: ignore[attr-defined]
+            widget._lmr_button_x = x  
+            widget._lmr_button_y = y  
+            widget._lmr_button_middle_width = width  
+            widget._lmr_button_width = self._compute_lmr_button_total_width(width, cfg["button_height"])  
+            widget._lmr_button_height = cfg["button_height"]  
+            widget._lmr_button_item = window_item  
             buttons = getattr(window, "_lmr_dialog_buttons", None)
             if buttons is None:
                 buttons = []
-                window._lmr_dialog_buttons = buttons  # type: ignore[attr-defined]
+                window._lmr_dialog_buttons = buttons  
             if widget not in buttons:
                 buttons.append(widget)
         return widget, window_item
@@ -4151,10 +4151,10 @@ class EditorApp:
         parent = self._get_lmr_dialog_content(window)
         shell = tk.Canvas(parent, width=width, height=height, bg=self._theme_color("#111111"), highlightthickness=0, bd=0)
         shell.place(x=x, y=y, width=width, height=height)
-        shell._lmr_shell_x = x  # type: ignore[attr-defined]
-        shell._lmr_shell_y = y  # type: ignore[attr-defined]
-        shell._lmr_shell_width = width  # type: ignore[attr-defined]
-        shell._lmr_shell_height = height  # type: ignore[attr-defined]
+        shell._lmr_shell_x = x  
+        shell._lmr_shell_y = y  
+        shell._lmr_shell_width = width  
+        shell._lmr_shell_height = height  
         state_suffix = "_opened" if opened else ""
         left_name = f"listbox_l{state_suffix}.png"
         right_name = f"listbox_r{state_suffix}.png"
@@ -4167,7 +4167,7 @@ class EditorApp:
         left = self._load_asset_exact(left_name, left_width, height)
         middle = self._load_asset_exact(f"listbox_m{state_suffix}.png", middle_width, height)
         right = self._load_asset_exact(right_name, right_width, height)
-        shell._shell_images = [left, middle, right]  # type: ignore[attr-defined]
+        shell._shell_images = [left, middle, right]  
         if left is not None:
             shell.create_image(0, 0, image=left, anchor="nw")
         if middle is not None:
@@ -4226,7 +4226,7 @@ class EditorApp:
             middle = self._load_asset_exact("listbox_m.png", middle_width, height)
         if right is None:
             right = self._load_asset_exact("listbox_r.png", right_width, height)
-        shell._dropdown_images = [left, middle, right]  # type: ignore[attr-defined]
+        shell._dropdown_images = [left, middle, right]  
         if left is not None:
             shell.create_image(0, 0, image=left, anchor="nw")
         if middle is not None:
@@ -4297,7 +4297,7 @@ class EditorApp:
         existing = getattr(shell, "_popup", None)
         if existing is not None and existing.winfo_exists():
             existing.destroy()
-            shell._popup = None  # type: ignore[attr-defined]
+            shell._popup = None  
             self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "idle", variable.get().strip())
             return
         if not values:
@@ -4319,18 +4319,18 @@ class EditorApp:
         canvas.pack()
         bg_mid = self._load_asset_exact("listbox_list_mid.png", popup_width, popup_height)
         if bg_mid is not None:
-            canvas._popup_images = [bg_mid]  # type: ignore[attr-defined]
+            canvas._popup_images = [bg_mid]  
             canvas.create_image(0, 0, image=bg_mid, anchor="nw")
         else:
             canvas.create_rectangle(0, 0, popup_width, popup_height, fill=self._theme_color("#161616"), outline="")
         sep_img = self._load_asset_exact("listbox_list_separator.png", popup_width, 2)
         if sep_img is not None:
-            canvas._popup_images = getattr(canvas, "_popup_images", []) + [sep_img]  # type: ignore[attr-defined]
+            canvas._popup_images = getattr(canvas, "_popup_images", []) + [sep_img]  
 
         def close_popup():
             if popup.winfo_exists():
                 popup.destroy()
-            shell._popup = None  # type: ignore[attr-defined]
+            shell._popup = None  
             self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "idle", variable.get().strip())
             try:
                 window.lift()
@@ -4365,14 +4365,14 @@ class EditorApp:
         popup.lift()
         popup.focus_force()
         popup.bind("<Escape>", lambda _e: close_popup())
-        shell._popup = popup  # type: ignore[attr-defined]
+        shell._popup = popup  
         self._draw_lmr_dropdown_shell(shell, shell.winfo_width(), shell.winfo_height(), "opened", variable.get().strip())
 
     def _create_lmr_combobox(self, window, variable: tk.StringVar, values, x: int, y: int, width: int):
         shell = self._create_lmr_input_shell(window, x, y, width, 24, opened=False)
-        shell._is_lmr_dropdown_shell = True  # type: ignore[attr-defined]
-        shell._dropdown_variable = variable  # type: ignore[attr-defined]
-        shell._dropdown_values = list(values)  # type: ignore[attr-defined]
+        shell._is_lmr_dropdown_shell = True  
+        shell._dropdown_variable = variable  
+        shell._dropdown_values = list(values)  
         if not variable.get() and values:
             variable.set(list(values)[0])
         self._draw_lmr_dropdown_shell(shell, width, 24, "idle", variable.get().strip())
@@ -4421,7 +4421,7 @@ class EditorApp:
                 width = int(getattr(button, "_lmr_button_width", button.winfo_reqwidth()))
                 height = int(getattr(button, "_lmr_button_height", button.winfo_reqheight()))
                 new_item = canvas.create_window(x, y, anchor="nw", window=button, width=width, height=height)
-                button._lmr_button_item = new_item  # type: ignore[attr-defined]
+                button._lmr_button_item = new_item  
         callback = getattr(window, "_lmr_layout_refresh", None)
         if callable(callback):
             callback()
@@ -4458,8 +4458,8 @@ class EditorApp:
             target_width, target_height = self._get_lmr_dialog_target_size(window)
             width = max(320, int(target_width))
             height = max(240, int(target_height))
-            window._dialog_width = width  # type: ignore[attr-defined]
-            window._dialog_height = height  # type: ignore[attr-defined]
+            window._dialog_width = width  
+            window._dialog_height = height  
             window.geometry(f"{width}x{height}+{window.winfo_x()}+{window.winfo_y()}")
             canvas = getattr(window, "_dialog_canvas", None)
             if canvas is not None:
@@ -4522,12 +4522,12 @@ class EditorApp:
 
         self._create_image_button(cfg["close_x"], cfg["close_y"], "exit_btn_idle.png", "exit_btn_onmouse.png", "exit_btn_clicked.png", lambda w=window: self._close_lmr_dialog(w), parent_window=window, parent_canvas=canvas)
 
-        window._dialog_canvas = canvas  # type: ignore[attr-defined]
-        window._dialog_content = canvas  # type: ignore[attr-defined]
-        window._dialog_title = title  # type: ignore[attr-defined]
-        window._dialog_width = width  # type: ignore[attr-defined]
-        window._dialog_height = height  # type: ignore[attr-defined]
-        window._layout_mtime = self._get_layout_mtime()  # type: ignore[attr-defined]
+        window._dialog_canvas = canvas  
+        window._dialog_content = canvas  
+        window._dialog_title = title  
+        window._dialog_width = width  
+        window._dialog_height = height  
+        window._layout_mtime = self._get_layout_mtime()  
         try:
             window.deiconify()
             window.lift()
@@ -4615,10 +4615,10 @@ class EditorApp:
         time_var = tk.StringVar(value="00:00 / 00:00")
         time_label = tk.Label(content_parent, textvariable=time_var, bg=self._theme_color("#111111"), fg=self._theme_color("#f0f0f0"), font=("Cascadia Mono", 8, "bold"), anchor="w")
         time_label.place(x=sound_cfg["time_x"], y=sound_cfg["time_y"])
-        window._lmr_audio_track_canvas = track_canvas  # type: ignore[attr-defined]
-        window._lmr_audio_time_var = time_var  # type: ignore[attr-defined]
-        window._lmr_audio_track_hovered = False  # type: ignore[attr-defined]
-        window._lmr_audio_track_pressed = False  # type: ignore[attr-defined]
+        window._lmr_audio_track_canvas = track_canvas  
+        window._lmr_audio_time_var = time_var  
+        window._lmr_audio_track_hovered = False  
+        window._lmr_audio_track_pressed = False  
         self._reset_lmr_dialog_audio_ui(window)
         file_var.trace_add("write", lambda *_args, w=window: (self._close_lmr_dialog_audio(w), self._reset_lmr_dialog_audio_ui(w)))
         track_canvas.bind("<Button-1>", lambda event, w=window: (setattr(w, "_lmr_audio_track_pressed", True), self._handle_lmr_audio_track_event(w, event)))
@@ -4644,17 +4644,17 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", sound_cfg["add_x"], sound_cfg["add_y"], submit, middle_width=sound_cfg["add_width"])
         def refresh_sound_layout():
             cfg = self.layout["lmr_sound_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"])
             asset_entry.place_configure(x=cfg["asset_entry_x"], y=cfg["asset_entry_y"], width=cfg["asset_entry_width"])
             folder_entry.place_configure(x=cfg["folder_entry_x"], y=cfg["folder_entry_y"], width=cfg["folder_entry_width"])
             file_entry.place_configure(x=cfg["file_entry_x"], y=cfg["file_entry_y"], width=cfg["file_entry_width"])
             for button, prefix in ((browse_button, "browse"), (cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
             for label_widget, prefix in zip(label_widgets, ("technical_label", "asset_label", "folder_label", "file_label")):
                 label_widget.place_configure(x=cfg[f"{prefix}_x"], y=cfg[f"{prefix}_y"])
             if play_button is not None:
@@ -4668,8 +4668,8 @@ class EditorApp:
             track_canvas.place_configure(x=cfg["track_x"], y=cfg["track_y"], width=cfg["track_width"], height=cfg["track_height"])
             time_label.place_configure(x=cfg["time_x"], y=cfg["time_y"])
             self._render_lmr_audio_trackbar(window, getattr(window, "_lmr_audio_track_fraction", 0.0))
-        window._lmr_size_provider = lambda: (self.layout["lmr_sound_dialog"]["width"], self.layout["lmr_sound_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_sound_layout  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_sound_dialog"]["width"], self.layout["lmr_sound_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_sound_layout  
         refresh_sound_layout()
         window.grab_set()
         window.focus_force()
@@ -4709,8 +4709,8 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_backdrop_text_layout():
             cfg = self.layout["lmr_backdrop_text_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             locale_label.place_configure(x=cfg["locale_label_x"], y=cfg["locale_label_y"])
             text_label.place_configure(x=cfg["text_label_x"], y=cfg["text_label_y"])
@@ -4718,12 +4718,12 @@ class EditorApp:
             locale_shell.place_configure(x=cfg["locale_x"], y=cfg["locale_y"], width=cfg["locale_width"], height=24)
             text_entry.place_configure(x=cfg["text_entry_x"], y=cfg["text_entry_y"], width=cfg["text_entry_width"])
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_backdrop_text_dialog"]["width"], self.layout["lmr_backdrop_text_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_backdrop_text_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_backdrop_text_dialog"]["width"], self.layout["lmr_backdrop_text_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_backdrop_text_layout  
         refresh_backdrop_text_layout()
         window.grab_set()
         window.focus_force()
@@ -4762,8 +4762,8 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_variable_layout():
             cfg = self.layout["lmr_variable_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             type_label.place_configure(x=cfg["type_label_x"], y=cfg["type_label_y"])
             value_label.place_configure(x=cfg["value_label_x"], y=cfg["value_label_y"])
@@ -4771,12 +4771,12 @@ class EditorApp:
             type_shell.place_configure(x=cfg["type_x"], y=cfg["type_y"], width=cfg["type_width"], height=24)
             value_entry.place_configure(x=cfg["value_entry_x"], y=cfg["value_entry_y"], width=cfg["value_entry_width"])
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_variable_dialog"]["width"], self.layout["lmr_variable_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_variable_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_variable_dialog"]["width"], self.layout["lmr_variable_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_variable_layout  
         refresh_variable_layout()
         window.grab_set()
         window.focus_force()
@@ -4875,34 +4875,34 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_catalogs_layout():
             cfg = self.layout["lmr_catalogs_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             name_label.place_configure(x=cfg["name_label_x"], y=cfg["name_label_y"])
             mode_label.place_configure(x=cfg["mode_label_x"], y=cfg["mode_label_y"])
             name_entry.place_configure(x=cfg["name_entry_x"], y=cfg["name_entry_y"], width=cfg["name_entry_width"])
             mode_shell.place_configure(x=cfg["mode_x"], y=cfg["mode_y"], width=cfg["mode_width"], height=24)
             single_label.place_configure(x=cfg["single_label_x"], y=cfg["single_label_y"])
             single_shell.place_configure(x=cfg["single_entry_x"], y=cfg["single_entry_y"], width=cfg["single_entry_width"], height=24)
-            single_browse_button._lmr_button_x = cfg["single_browse_x"]  # type: ignore[attr-defined]
-            single_browse_button._lmr_button_y = cfg["single_browse_y"]  # type: ignore[attr-defined]
-            single_browse_button._lmr_button_middle_width = cfg["single_browse_width"]  # type: ignore[attr-defined]
-            single_browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["single_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+            single_browse_button._lmr_button_x = cfg["single_browse_x"]  
+            single_browse_button._lmr_button_y = cfg["single_browse_y"]  
+            single_browse_button._lmr_button_middle_width = cfg["single_browse_width"]  
+            single_browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["single_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
             for index, (label, entry, shell, browse_button, _y) in enumerate(platform_widgets):
                 y = cfg["platform_start_y"] + index * cfg["platform_step_y"]
                 label.place_configure(x=cfg["platform_label_x"], y=y)
                 shell.place_configure(x=cfg["platform_entry_x"], y=y, width=cfg["platform_entry_width"], height=24)
-                browse_button._lmr_button_x = cfg["platform_browse_x"]  # type: ignore[attr-defined]
-                browse_button._lmr_button_y = y + cfg["platform_browse_offset_y"]  # type: ignore[attr-defined]
-                browse_button._lmr_button_middle_width = cfg["platform_browse_width"]  # type: ignore[attr-defined]
-                browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["platform_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+                browse_button._lmr_button_x = cfg["platform_browse_x"]  
+                browse_button._lmr_button_y = y + cfg["platform_browse_offset_y"]  
+                browse_button._lmr_button_middle_width = cfg["platform_browse_width"]  
+                browse_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["platform_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
             update_form()
-        window._lmr_size_provider = lambda: (self.layout["lmr_catalogs_dialog"]["width"], self.layout["lmr_catalogs_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_catalogs_layout  # type: ignore[attr-defined]
+        window._lmr_size_provider = lambda: (self.layout["lmr_catalogs_dialog"]["width"], self.layout["lmr_catalogs_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_catalogs_layout  
         refresh_catalogs_layout()
         update_form()
         window.grab_set()
@@ -4942,19 +4942,19 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_color_layout():
             cfg = self.layout["lmr_color_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             name_label.place_configure(x=cfg["name_label_x"], y=cfg["name_label_y"])
             value_label.place_configure(x=cfg["value_label_x"], y=cfg["value_label_y"])
             name_entry.place_configure(x=cfg["name_entry_x"], y=cfg["name_entry_y"], width=cfg["name_entry_width"])
             value_entry.place_configure(x=cfg["value_entry_x"], y=cfg["value_entry_y"], width=cfg["value_entry_width"])
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_color_dialog"]["width"], self.layout["lmr_color_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_color_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_color_dialog"]["width"], self.layout["lmr_color_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_color_layout  
         refresh_color_layout()
         window.grab_set()
         window.focus_force()
@@ -5000,8 +5000,8 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_language_layout():
             cfg = self.layout["lmr_language_pair_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             ru_label.place_configure(x=cfg["ru_label_x"], y=cfg["ru_label_y"])
             en_label.place_configure(x=cfg["en_label_x"], y=cfg["en_label_y"])
@@ -5009,12 +5009,12 @@ class EditorApp:
             ru_entry.place_configure(x=cfg["ru_entry_x"], y=cfg["ru_entry_y"], width=cfg["ru_entry_width"])
             en_entry.place_configure(x=cfg["en_entry_x"], y=cfg["en_entry_y"], width=cfg["en_entry_width"])
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_language_pair_dialog"]["width"], self.layout["lmr_language_pair_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_language_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_language_pair_dialog"]["width"], self.layout["lmr_language_pair_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_language_layout  
         refresh_language_layout()
         window.grab_set()
         window.focus_force()
@@ -5056,8 +5056,8 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_xy_layout():
             cfg = self.layout["lmr_xy_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             x_label.place_configure(x=cfg["x_label_x"], y=cfg["x_label_y"])
             y_label.place_configure(x=cfg["y_label_x"], y=cfg["y_label_y"])
@@ -5065,12 +5065,12 @@ class EditorApp:
             x_entry.place_configure(x=cfg["x_entry_x"], y=cfg["x_entry_y"], width=cfg["x_entry_width"])
             y_entry.place_configure(x=cfg["y_entry_x"], y=cfg["y_entry_y"], width=cfg["y_entry_width"])
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_xy_dialog"]["width"], self.layout["lmr_xy_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_xy_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_xy_dialog"]["width"], self.layout["lmr_xy_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_xy_layout  
         refresh_xy_layout()
         window.grab_set()
         window.focus_force()
@@ -5112,8 +5112,8 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_transition_layout():
             cfg = self.layout["lmr_transition_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             preset_label.place_configure(x=cfg["preset_label_x"], y=cfg["preset_label_y"])
             duration_label.place_configure(x=cfg["duration_label_x"], y=cfg["duration_label_y"])
@@ -5123,12 +5123,12 @@ class EditorApp:
             duration_entry.place_configure(x=cfg["duration_x"], y=cfg["duration_y"], width=cfg["duration_width"])
             condition_entry.place_configure(x=cfg["condition_x"], y=cfg["condition_y"], width=cfg["condition_width"])
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_transition_dialog"]["width"], self.layout["lmr_transition_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_transition_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_transition_dialog"]["width"], self.layout["lmr_transition_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_transition_layout  
         refresh_transition_layout()
         window.grab_set()
         window.focus_force()
@@ -5158,17 +5158,17 @@ class EditorApp:
         add_button, _ = self._create_lmr_dialog_button(window, "Add", cfg0["add_x"], cfg0["add_y"], submit, middle_width=cfg0["add_width"])
         def refresh_entry_layout():
             cfg = self.layout["lmr_entry_point_dialog"]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             scenario_label.place_configure(x=cfg["scenario_label_x"], y=cfg["scenario_label_y"])
             scenario_shell.place_configure(x=cfg["scenario_x"], y=cfg["scenario_y"], width=cfg["scenario_width"], height=24)
             for button, prefix in ((cancel_button, "cancel"), (add_button, "add")):
-                button._lmr_button_x = cfg[f"{prefix}_x"]  # type: ignore[attr-defined]
-                button._lmr_button_y = cfg[f"{prefix}_y"]  # type: ignore[attr-defined]
-                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  # type: ignore[attr-defined]
-                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout["lmr_entry_point_dialog"]["width"], self.layout["lmr_entry_point_dialog"]["height"])  # type: ignore[attr-defined]
-        window._lmr_layout_refresh = refresh_entry_layout  # type: ignore[attr-defined]
+                button._lmr_button_x = cfg[f"{prefix}_x"]  
+                button._lmr_button_y = cfg[f"{prefix}_y"]  
+                button._lmr_button_middle_width = cfg[f"{prefix}_width"]  
+                button._lmr_button_width = self._compute_lmr_button_total_width(cfg[f"{prefix}_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+        window._lmr_size_provider = lambda: (self.layout["lmr_entry_point_dialog"]["width"], self.layout["lmr_entry_point_dialog"]["height"])  
+        window._lmr_layout_refresh = refresh_entry_layout  
         refresh_entry_layout()
         window.grab_set()
         window.focus_force()
@@ -5287,8 +5287,8 @@ class EditorApp:
 
         def refresh_visual_layout():
             cfg = self.layout[layout_key]
-            window._dialog_width = cfg["width"]  # type: ignore[attr-defined]
-            window._dialog_height = cfg["height"]  # type: ignore[attr-defined]
+            window._dialog_width = cfg["width"]  
+            window._dialog_height = cfg["height"]  
             technical_label.place_configure(x=cfg["technical_label_x"], y=cfg["technical_label_y"])
             technical_entry.place_configure(x=cfg["technical_entry_x"], y=cfg["technical_entry_y"], width=cfg["technical_entry_width"], height=24)
             asset_label.place_configure(x=cfg["asset_label_x"], y=cfg["asset_label_y"])
@@ -5310,35 +5310,35 @@ class EditorApp:
                 anim_widgets[0].place_configure(x=cfg["anim_label_x"], y=cfg["anim_label_y"])
                 anim_widgets[1].place_configure(x=cfg["anim_entry_x"], y=cfg["anim_entry_y"], width=cfg["anim_entry_width"], height=24)
                 anim_widgets[2].place_configure(x=cfg["anim_entry_x"], y=cfg["anim_entry_y"], width=cfg["anim_entry_width"], height=24)
-                anim_button_widget._lmr_button_x = cfg["anim_browse_x"]  # type: ignore[attr-defined]
-                anim_button_widget._lmr_button_y = cfg["anim_browse_y"]  # type: ignore[attr-defined]
-                anim_button_widget._lmr_button_middle_width = cfg["anim_browse_width"]  # type: ignore[attr-defined]
-                anim_button_widget._lmr_button_width = self._compute_lmr_button_total_width(cfg["anim_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+                anim_button_widget._lmr_button_x = cfg["anim_browse_x"]  
+                anim_button_widget._lmr_button_y = cfg["anim_browse_y"]  
+                anim_button_widget._lmr_button_middle_width = cfg["anim_browse_width"]  
+                anim_button_widget._lmr_button_width = self._compute_lmr_button_total_width(cfg["anim_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
                 anim_button_item_current = getattr(anim_button_widget, "_lmr_button_item", None)
                 if anim_button_item_current is not None:
                     canvas = getattr(window, "_dialog_canvas", None)
                     if canvas is not None:
                         canvas.coords(anim_button_item_current, cfg["anim_browse_x"], cfg["anim_browse_y"])
                         canvas.itemconfigure(anim_button_item_current, width=cfg["anim_browse_width"], height=self.layout["lmr_resource_manager_window"]["button_height"])
-            static_browse_widget._lmr_button_x = cfg["static_browse_x"]  # type: ignore[attr-defined]
-            static_browse_widget._lmr_button_y = cfg["static_browse_y"]  # type: ignore[attr-defined]
-            static_browse_widget._lmr_button_middle_width = cfg["static_browse_width"]  # type: ignore[attr-defined]
-            static_browse_widget._lmr_button_width = self._compute_lmr_button_total_width(cfg["static_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-            cancel_button._lmr_button_x = cfg["cancel_x"]  # type: ignore[attr-defined]
-            cancel_button._lmr_button_y = cfg["cancel_y"] if layout_key == "lmr_bg_cg_dialog" else (cfg["cancel_y_animated"] if allow_animation else cfg["cancel_y_static"])  # type: ignore[attr-defined]
-            cancel_button._lmr_button_middle_width = cfg["cancel_width"]  # type: ignore[attr-defined]
-            cancel_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["cancel_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
-            add_button._lmr_button_x = cfg["add_x"]  # type: ignore[attr-defined]
-            add_button._lmr_button_y = cfg["add_y"] if layout_key == "lmr_bg_cg_dialog" else (cfg["add_y_animated"] if allow_animation else cfg["add_y_static"])  # type: ignore[attr-defined]
-            add_button._lmr_button_middle_width = cfg["add_width"]  # type: ignore[attr-defined]
-            add_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["add_width"], self.layout["lmr_resource_manager_window"]["button_height"])  # type: ignore[attr-defined]
+            static_browse_widget._lmr_button_x = cfg["static_browse_x"]  
+            static_browse_widget._lmr_button_y = cfg["static_browse_y"]  
+            static_browse_widget._lmr_button_middle_width = cfg["static_browse_width"]  
+            static_browse_widget._lmr_button_width = self._compute_lmr_button_total_width(cfg["static_browse_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+            cancel_button._lmr_button_x = cfg["cancel_x"]  
+            cancel_button._lmr_button_y = cfg["cancel_y"] if layout_key == "lmr_bg_cg_dialog" else (cfg["cancel_y_animated"] if allow_animation else cfg["cancel_y_static"])  
+            cancel_button._lmr_button_middle_width = cfg["cancel_width"]  
+            cancel_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["cancel_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
+            add_button._lmr_button_x = cfg["add_x"]  
+            add_button._lmr_button_y = cfg["add_y"] if layout_key == "lmr_bg_cg_dialog" else (cfg["add_y_animated"] if allow_animation else cfg["add_y_static"])  
+            add_button._lmr_button_middle_width = cfg["add_width"]  
+            add_button._lmr_button_width = self._compute_lmr_button_total_width(cfg["add_width"], self.layout["lmr_resource_manager_window"]["button_height"])  
             canvas = getattr(window, "_dialog_canvas", None)
             for button in (static_browse_widget, cancel_button, add_button):
                 item = getattr(button, "_lmr_button_item", None)
                 if canvas is not None and item is not None:
                     max_x = max(0, cfg["width"] - button._lmr_button_width - 8)
                     if button._lmr_button_x > max_x:
-                        button._lmr_button_x = max_x  # type: ignore[attr-defined]
+                        button._lmr_button_x = max_x  
                     canvas.coords(item, button._lmr_button_x, button._lmr_button_y)
                     canvas.itemconfigure(item, width=button._lmr_button_width, height=self.layout["lmr_resource_manager_window"]["button_height"])
             if allow_animation and len(anim_widgets) >= 5:
@@ -5347,13 +5347,13 @@ class EditorApp:
                 if canvas is not None and item is not None:
                     max_x = max(0, cfg["width"] - anim_button_widget._lmr_button_width - 8)
                     if anim_button_widget._lmr_button_x > max_x:
-                        anim_button_widget._lmr_button_x = max_x  # type: ignore[attr-defined]
+                        anim_button_widget._lmr_button_x = max_x  
                     canvas.coords(item, anim_button_widget._lmr_button_x, anim_button_widget._lmr_button_y)
                     canvas.itemconfigure(item, width=anim_button_widget._lmr_button_width, height=self.layout["lmr_resource_manager_window"]["button_height"])
             update_form()
 
-        window._lmr_layout_refresh = refresh_visual_layout  # type: ignore[attr-defined]
-        window._lmr_size_provider = lambda: (self.layout[layout_key]["width"], self.layout[layout_key]["height"])  # type: ignore[attr-defined]
+        window._lmr_layout_refresh = refresh_visual_layout  
+        window._lmr_size_provider = lambda: (self.layout[layout_key]["width"], self.layout[layout_key]["height"])  
         refresh_visual_layout()
         update_form()
         window.grab_set()
