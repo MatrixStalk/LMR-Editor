@@ -73,6 +73,7 @@ APP_SETTINGS_PATH = BASE_DIR / "app_settings.json"
 BAD_APPLE_DIR = BASE_DIR / "bad_apple"
 BAD_APPLE_FRAMES_PATH = BAD_APPLE_DIR / "framesData.lz"
 BAD_APPLE_AUDIO_PATH = BAD_APPLE_DIR / "bad_apple.mp3"
+APP_ICON_PATH = BASE_DIR / "icon.ico"
 LMR_GAME_DATA_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Love, Money, Rock-n-Roll\Love, Money, Rock'n'Roll_Data")
 LMR_RESOURCES_ASSETS_PATH = LMR_GAME_DATA_DIR / "resources.assets"
 LMR_RESOURCES_RESS_PATH = LMR_GAME_DATA_DIR / "resources.assets.resS"
@@ -90,6 +91,26 @@ SUPPORTED_MOD_GAMES = [
     {"id": "es2", "name": "Everlasting Summer 2"},
 ]
 BAD_APPLE_FPS = 30
+
+
+if os.name == "nt":
+    GWL_STYLE = -16
+    GWL_EXSTYLE = -20
+    WS_CAPTION = 0x00C00000
+    WS_THICKFRAME = 0x00040000
+    WS_SYSMENU = 0x00080000
+    WS_MINIMIZEBOX = 0x00020000
+    WS_MAXIMIZEBOX = 0x00010000
+    WS_EX_TOOLWINDOW = 0x00000080
+    WS_EX_APPWINDOW = 0x00040000
+    SWP_NOSIZE = 0x0001
+    SWP_NOMOVE = 0x0002
+    SWP_NOZORDER = 0x0004
+    SWP_FRAMECHANGED = 0x0020
+    AW_HIDE = 0x00010000
+    AW_ACTIVATE = 0x00020000
+    AW_BLEND = 0x00080000
+
 def load_json(path: Path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -885,9 +906,15 @@ class EditorApp:
         self.layout_mtime = self._get_layout_mtime()
         self.app_settings = APP_SETTINGS.copy()
         self.root.title(APP_DISPLAY_NAME)
+        self._taskbar_configured = False
+        self.taskbar_host = None
+        self._hidden_internal_windows_for_taskbar = []
+        self._suppress_taskbar_restore_until = 0.0
+        self._taskbar_toggle_inflight = False
         self.root.overrideredirect(True)
         self.root.resizable(False, False)
         self.root.configure(bg=TRANSPARENT_COLOR)
+        self._apply_app_icon()
         try:
             self.root.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
         except tk.TclError:
@@ -996,12 +1023,127 @@ class EditorApp:
         self._presence_loop()
         self._watch_layout_file()
         self._schedule_line_numbers_refresh()
+        self.root.after(0, self._configure_taskbar_window)
 
     def _theme_color(self, color: str) -> str:
         return color
 
     def _apply_theme_to_pil_image(self, image):
         return image.convert("RGBA")
+
+    def _apply_app_icon(self, window=None):
+        target = self.root if window is None else window
+        if not APP_ICON_PATH.exists():
+            return
+        try:
+            target.iconbitmap(default=str(APP_ICON_PATH))
+        except tk.TclError:
+            pass
+
+    def _configure_taskbar_window(self):
+        if self._taskbar_configured:
+            return
+        if os.name == "nt":
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_DISPLAY_NAME)
+            except Exception:
+                pass
+        host = tk.Toplevel(self.root)
+        self.taskbar_host = host
+        self._suppress_taskbar_restore_until = time.monotonic() + 0.5
+        host.title(APP_DISPLAY_NAME)
+        host.resizable(False, False)
+        host.geometry("1x1+-32000+-32000")
+        try:
+            host.attributes("-alpha", 0.0)
+        except tk.TclError:
+            pass
+        self._apply_app_icon(host)
+        host.protocol("WM_DELETE_WINDOW", self.on_close)
+        host.bind("<FocusIn>", self._handle_taskbar_host_activate, add="+")
+        host.bind("<Map>", self._handle_taskbar_host_activate, add="+")
+        try:
+            host.lift()
+        except tk.TclError:
+            return
+        self._taskbar_configured = True
+        self._show_editor_from_taskbar()
+
+    def _handle_taskbar_host_activate(self, _event=None):
+        if self._taskbar_toggle_inflight or time.monotonic() < self._suppress_taskbar_restore_until:
+            return
+        self._taskbar_toggle_inflight = True
+        self.root.after(10, self.toggle_main_window_visibility)
+
+    def _is_main_window_visible(self) -> bool:
+        try:
+            return self.root.state() != "withdrawn"
+        except tk.TclError:
+            return False
+
+    def _animate_root_window(self, show: bool):
+        if os.name != "nt":
+            return
+        try:
+            hwnd = self.root.winfo_id()
+        except tk.TclError:
+            return
+        if not hwnd:
+            return
+        try:
+            flags = AW_BLEND | (AW_ACTIVATE if show else AW_HIDE)
+            ctypes.windll.user32.AnimateWindow(hwnd, 160, flags)
+        except Exception:
+            pass
+
+    def _release_taskbar_toggle_guard(self):
+        self._taskbar_toggle_inflight = False
+
+    def _show_editor_from_taskbar(self):
+        try:
+            self.root.deiconify()
+            self._apply_app_icon()
+            self.root.update_idletasks()
+            self._animate_root_window(show=True)
+            self.root.lift()
+            self.root.focus_force()
+        except tk.TclError:
+            pass
+        hidden_windows = list(self._hidden_internal_windows_for_taskbar)
+        self._hidden_internal_windows_for_taskbar = []
+        for window in hidden_windows:
+            if not self._is_window_alive(window):
+                continue
+            try:
+                window.deiconify()
+            except tk.TclError:
+                continue
+            self._schedule_internal_window_sync(window)
+        self._schedule_internal_window_sync()
+        self._suppress_taskbar_restore_until = time.monotonic() + 0.2
+        self.root.after(220, self._release_taskbar_toggle_guard)
+
+    def _hide_editor_to_taskbar(self):
+        self._suppress_taskbar_restore_until = time.monotonic() + 0.35
+        self._prune_internal_windows()
+        self._hidden_internal_windows_for_taskbar = [window for window in self.internal_windows if self._is_window_alive(window)]
+        for window in self._hidden_internal_windows_for_taskbar:
+            try:
+                window.withdraw()
+            except tk.TclError:
+                pass
+        self._animate_root_window(show=False)
+        try:
+            self.root.withdraw()
+        except tk.TclError:
+            pass
+        self.root.after(220, self._release_taskbar_toggle_guard)
+
+    def toggle_main_window_visibility(self):
+        if self._is_main_window_visible():
+            self._hide_editor_to_taskbar()
+        else:
+            self._show_editor_from_taskbar()
 
     def _should_preserve_asset_colors(self, name: str) -> bool:
         return name in {
@@ -3141,9 +3283,8 @@ class EditorApp:
         self.root.geometry(f"{self.layout['window']['width']}x{self.layout['window']['height']}+{x}+{y}")
 
     def _minimize_window(self):
-        self.root.overrideredirect(False)
-        self.root.iconify()
-        self.root.after(200, self._restore_borderless)
+        self._taskbar_toggle_inflight = True
+        self._hide_editor_to_taskbar()
 
     def _restore_borderless(self):
         if self.root.state() == "normal":
@@ -7175,6 +7316,11 @@ class EditorApp:
         if self.line_numbers_refresh_job is not None:
             try:
                 self.root.after_cancel(self.line_numbers_refresh_job)
+            except tk.TclError:
+                pass
+        if self.taskbar_host is not None and self.taskbar_host.winfo_exists():
+            try:
+                self.taskbar_host.destroy()
             except tk.TclError:
                 pass
         self.root.destroy()
