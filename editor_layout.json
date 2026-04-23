@@ -15,6 +15,7 @@
     "file_x": 283,
     "settings_x": 306,
     "resource_manager_x": 1650,
+    "live2d_x": 380,
     "y": 79
   },
   "logos": {
@@ -274,6 +275,28 @@
       "note_2_x": 18,
       "note_2_y": 94
     }
+  },
+  "live2d_browser_window": {
+    "width": 980,
+    "height": 640,
+    "offset_x": 220,
+    "offset_y": 120,
+    "list_x": 16,
+    "list_y": 16,
+    "list_width": 260,
+    "list_height": 560,
+    "details_x": 292,
+    "details_y": 16,
+    "details_width": 370,
+    "details_height": 560,
+    "preview_x": 680,
+    "preview_y": 16,
+    "preview_width": 280,
+    "preview_height": 280,
+    "actions_y": 592,
+    "open_x": 292,
+    "export_x": 428,
+    "refresh_x": 564
   },
   "create_file_window": {
     "width": 520,

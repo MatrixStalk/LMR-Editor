@@ -4,6 +4,7 @@ import queue
 import re
 import shutil
 import struct
+import subprocess
 import threading
 import time
 import tkinter as tk
@@ -14,6 +15,7 @@ import ctypes
 import winsound
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
+import base64
 
 
 #TODO LIST:
@@ -52,6 +54,9 @@ ASSETS_DIR = BASE_DIR / "assets"
 DISCORD_RPC_PATH = BASE_DIR / "discordrpc"
 LAYOUT_PATH = BASE_DIR / "editor_layout.json"
 APP_SETTINGS_PATH = BASE_DIR / "app_settings.json"
+BAD_APPLE_DIR = BASE_DIR / "bad_apple"
+BAD_APPLE_FRAMES_PATH = BAD_APPLE_DIR / "framesData.lz"
+BAD_APPLE_AUDIO_PATH = BAD_APPLE_DIR / "bad_apple.mp3"
 LMR_GAME_DATA_DIR = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Love, Money, Rock-n-Roll\Love, Money, Rock'n'Roll_Data")
 LMR_RESOURCES_ASSETS_PATH = LMR_GAME_DATA_DIR / "resources.assets"
 LMR_RESOURCES_RESS_PATH = LMR_GAME_DATA_DIR / "resources.assets.resS"
@@ -68,6 +73,7 @@ SUPPORTED_MOD_GAMES = [
     {"id": "es", "name": "Everlasting Summer"},
     {"id": "es2", "name": "Everlasting Summer 2"},
 ]
+BAD_APPLE_FPS = 30
 def load_json(path: Path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -150,7 +156,7 @@ def generate_build_number() -> str:
 DEFAULT_LAYOUT = {
     "window": {"width": 1919, "height": 1079, "drag_top_height": 52},
     "drag_area": {"x": 94, "y": 22, "width": 1720, "height": 92},
-    "menu": {"project_x": 148, "file_x": 203, "settings_x": 239, "resource_manager_x": 298, "y": 31},
+    "menu": {"project_x": 148, "file_x": 203, "settings_x": 239, "resource_manager_x": 298, "live2d_x": 460, "y": 31},
     "logos": {"main_x": 878, "main_y": 29, "side_x": 108, "side_y": 81},
     "file_tabs": {
         "x": 180,
@@ -342,6 +348,28 @@ DEFAULT_LAYOUT = {
             "note_2_x": 18,
             "note_2_y": 124
         }
+    },
+    "live2d_browser_window": {
+        "width": 980,
+        "height": 640,
+        "offset_x": 220,
+        "offset_y": 120,
+        "list_x": 16,
+        "list_y": 16,
+        "list_width": 260,
+        "list_height": 560,
+        "details_x": 292,
+        "details_y": 16,
+        "details_width": 370,
+        "details_height": 560,
+        "preview_x": 680,
+        "preview_y": 16,
+        "preview_width": 280,
+        "preview_height": 280,
+        "actions_y": 592,
+        "open_x": 292,
+        "export_x": 428,
+        "refresh_x": 564,
     },
     "create_file_window": {
         "width": 520,
@@ -905,6 +933,13 @@ class EditorApp:
         self.asset_viewer_preview_image = None
         self.asset_viewer_audio_info_var = None
         self.asset_viewer_audio_temp_path = None
+        self.live2d_browser_window = None
+        self.live2d_source_dir: Path | None = None
+        self.live2d_models = []
+        self.live2d_listbox = None
+        self.live2d_details_text = None
+        self.live2d_preview_label = None
+        self.live2d_preview_image = None
         self.settings_canvas = None
         self.settings_vars: dict[str, tk.Variable] = {}
         self.settings_drag_offset_x = 0
@@ -922,6 +957,14 @@ class EditorApp:
         self.hovered_tree_item = None
         self.last_line_count = 0
         self.line_numbers_refresh_job = None
+        self.bad_apple_frames = None
+        self.bad_apple_playing = False
+        self.bad_apple_job = None
+        self.bad_apple_started_at = 0.0
+        self.bad_apple_saved_state = None
+        self.bad_apple_audio_alias = ""
+        self.bad_apple_audio_process = None
+        self.bad_apple_audio_delay_ms = 0
 
         self._build_window()
         self._build_popup_menus()
@@ -1355,8 +1398,18 @@ class EditorApp:
         file_menu.add_command(label="Save", command=self.save_current_file)
         file_menu.add_command(label="Export ZIP", command=self.export_zip)
         file_menu.add_separator()
+        file_menu.add_command(label="Play Bad Apple ASCII", command=self.play_bad_apple_ascii)
+        file_menu.add_command(label="Stop Bad Apple ASCII", command=self.stop_bad_apple_ascii)
+        file_menu.add_separator()
         file_menu.add_command(label="Close", command=self.on_close)
         self.popup_menus["File"] = file_menu
+
+        live2d_menu = tk.Menu(self.root, tearoff=False, bg=menu_bg, fg=menu_fg, activebackground=menu_active_bg, activeforeground=menu_active_fg, bd=0)
+        live2d_menu.add_command(label="Open Live2D Model Folder", command=self.open_live2d_model_folder)
+        live2d_menu.add_command(label="Live2D Browser", command=self.open_live2d_browser_window)
+        live2d_menu.add_command(label="Export Live2D Package", command=self.export_selected_live2d_package)
+        live2d_menu.add_command(label="Model Info", command=self.show_selected_live2d_model_info)
+        self.popup_menus["Live2D Tools"] = live2d_menu
 
         if self._detect_project_type() == "lmr":
             self.popup_menus["LMR Resource Manager"] = self._build_lmr_resource_manager_menu(self.root)
@@ -1402,6 +1455,7 @@ class EditorApp:
         self.top_menu_item_ids.append(self._create_text_button(menu["project_x"], menu["y"], "Project", self.open_project))
         self.top_menu_item_ids.append(self._create_text_button(menu["file_x"], menu["y"], "File", self.save_current_file))
         self.top_menu_item_ids.append(self._create_text_button(menu["settings_x"], menu["y"], "Settings", self.open_settings_window))
+        self.top_menu_item_ids.append(self._create_text_button(menu["live2d_x"], menu["y"], "Live2D Tools", self.open_live2d_browser_window))
         if self._detect_project_type() == "lmr":
             self.top_menu_item_ids.append(self._create_text_button(menu["resource_manager_x"], menu["y"], "LMR Resource Manager", self.open_settings_window))
 
@@ -2829,7 +2883,7 @@ class EditorApp:
         layout["status"]["cursor_x"] = max(0, min(int(layout["status"].get("cursor_x", DEFAULT_LAYOUT["status"]["cursor_x"])), width - 20))
         layout["status"]["cursor_y"] = max(0, min(int(layout["status"].get("cursor_y", DEFAULT_LAYOUT["status"]["cursor_y"])), height - 20))
 
-        for name in ("project_x", "file_x", "settings_x", "resource_manager_x"):
+        for name in ("project_x", "file_x", "settings_x", "resource_manager_x", "live2d_x"):
             layout["menu"][name] = max(0, min(int(layout["menu"].get(name, DEFAULT_LAYOUT["menu"][name])), width - 20))
         layout["menu"]["y"] = max(0, min(int(layout["menu"].get("y", DEFAULT_LAYOUT["menu"]["y"])), height - 20))
 
@@ -2936,6 +2990,15 @@ class EditorApp:
         default_create_file = DEFAULT_LAYOUT["create_file_window"]
         for key, default_value in default_create_file.items():
             create_file[key] = int(create_file.get(key, default_value))
+
+        live2d_browser = layout.get("live2d_browser_window", DEFAULT_LAYOUT["live2d_browser_window"])
+        layout["live2d_browser_window"] = {}
+        for key, default_value in DEFAULT_LAYOUT["live2d_browser_window"].items():
+            value = live2d_browser.get(key, default_value)
+            if key in {"width", "height", "list_width", "list_height", "details_width", "details_height", "preview_width", "preview_height"}:
+                layout["live2d_browser_window"][key] = max(10, int(value))
+            else:
+                layout["live2d_browser_window"][key] = int(value)
 
         resource_window = layout.get("lmr_resource_manager_window", DEFAULT_LAYOUT["lmr_resource_manager_window"])
         layout["lmr_resource_manager_window"] = {}
@@ -3875,6 +3938,290 @@ class EditorApp:
         worker = threading.Thread(target=self._extract_lmr_bundles_worker, args=(game_dir, output_dir, result_queue), daemon=True)
         worker.start()
         progress_window.after(120, lambda: self._poll_lmr_bundle_extractor(progress_window, status_var, result_queue))
+
+    def _parse_live2d_model_info(self, model3_path: Path):
+        try:
+            payload = json.loads(model3_path.read_text(encoding="utf-8"))
+        except Exception as error:
+            return {
+                "name": model3_path.parent.name,
+                "model_path": model3_path,
+                "root_dir": model3_path.parent,
+                "error": str(error),
+                "textures": [],
+                "texture_paths": [],
+                "motions": [],
+                "expressions": [],
+                "physics": None,
+                "pose": None,
+                "userdata": None,
+                "moc": None,
+            }
+
+        refs = payload.get("FileReferences", {}) if isinstance(payload, dict) else {}
+        motions_block = refs.get("Motions", {}) if isinstance(refs, dict) else {}
+        expressions_block = refs.get("Expressions", []) if isinstance(refs, dict) else []
+        root_dir = model3_path.parent
+
+        textures = []
+        texture_paths = []
+        for texture_name in refs.get("Textures", []) if isinstance(refs, dict) else []:
+            texture_name = str(texture_name)
+            textures.append(texture_name)
+            texture_paths.append((root_dir / texture_name).resolve())
+
+        motions = []
+        if isinstance(motions_block, dict):
+            for group_name, group_items in motions_block.items():
+                if not isinstance(group_items, list):
+                    continue
+                for item in group_items:
+                    if not isinstance(item, dict):
+                        continue
+                    file_name = str(item.get("File", "")).strip()
+                    motions.append({
+                        "group": str(group_name),
+                        "file": file_name,
+                        "sound": str(item.get("Sound", "")).strip(),
+                        "path": (root_dir / file_name).resolve() if file_name else None,
+                    })
+
+        expressions = []
+        if isinstance(expressions_block, list):
+            for item in expressions_block:
+                if not isinstance(item, dict):
+                    continue
+                file_name = str(item.get("File", "")).strip()
+                expressions.append({
+                    "name": str(item.get("Name", "")).strip(),
+                    "file": file_name,
+                    "path": (root_dir / file_name).resolve() if file_name else None,
+                })
+
+        def resolve_optional(path_value):
+            path_value = str(path_value or "").strip()
+            if not path_value:
+                return None
+            return {
+                "value": path_value,
+                "path": (root_dir / path_value).resolve(),
+            }
+
+        moc_name = str(refs.get("Moc", "")).strip() if isinstance(refs, dict) else ""
+        return {
+            "name": str(payload.get("Name") or model3_path.parent.name),
+            "model_path": model3_path,
+            "root_dir": root_dir,
+            "error": None,
+            "moc": resolve_optional(moc_name),
+            "textures": textures,
+            "texture_paths": texture_paths,
+            "motions": motions,
+            "expressions": expressions,
+            "physics": resolve_optional(refs.get("Physics")) if isinstance(refs, dict) else None,
+            "pose": resolve_optional(refs.get("Pose")) if isinstance(refs, dict) else None,
+            "userdata": resolve_optional(refs.get("UserData")) if isinstance(refs, dict) else None,
+        }
+
+    def _scan_live2d_models(self, root_dir: Path):
+        return [self._parse_live2d_model_info(path) for path in sorted(root_dir.rglob("model3.json")) if path.is_file()]
+
+    def open_live2d_model_folder(self):
+        initial_dir = str(self.live2d_source_dir) if self.live2d_source_dir and self.live2d_source_dir.exists() else str(BASE_DIR)
+        folder = filedialog.askdirectory(title="Select Live2D model folder", parent=self.root, initialdir=initial_dir)
+        if not folder:
+            return
+        self.live2d_source_dir = Path(folder)
+        self.live2d_models = self._scan_live2d_models(self.live2d_source_dir)
+        self.open_live2d_browser_window()
+
+    def _get_selected_live2d_model(self):
+        if self.live2d_listbox is None:
+            return None
+        selection = self.live2d_listbox.curselection()
+        if not selection:
+            return None
+        index = int(selection[0])
+        if 0 <= index < len(self.live2d_models):
+            return self.live2d_models[index]
+        return None
+
+    def _format_live2d_model_summary(self, info) -> str:
+        if info is None:
+            return "No Live2D model selected."
+        if info.get("error"):
+            return f"Model: {info['name']}\nPath: {info['model_path']}\n\nError:\n{info['error']}"
+
+        lines = [
+            f"Model: {info['name']}",
+            f"model3.json: {info['model_path']}",
+            f"Root: {info['root_dir']}",
+            "",
+            f"MOC: {(info['moc']['value'] if info.get('moc') else 'missing')}",
+            f"Textures: {len(info.get('textures', []))}",
+            f"Motions: {len(info.get('motions', []))}",
+            f"Expressions: {len(info.get('expressions', []))}",
+            f"Physics: {(info['physics']['value'] if info.get('physics') else 'missing')}",
+            f"Pose: {(info['pose']['value'] if info.get('pose') else 'missing')}",
+            f"UserData: {(info['userdata']['value'] if info.get('userdata') else 'missing')}",
+            "",
+            "Textures:",
+        ]
+        if info.get("textures"):
+            lines.extend([f"    {name}" for name in info["textures"]])
+        else:
+            lines.append("    none")
+
+        lines.extend(["", "Motions:"])
+        if info.get("motions"):
+            for motion in info["motions"]:
+                suffix = f" [sound: {motion['sound']}]" if motion.get("sound") else ""
+                lines.append(f"    {motion['group']}: {motion['file']}{suffix}")
+        else:
+            lines.append("    none")
+
+        lines.extend(["", "Expressions:"])
+        if info.get("expressions"):
+            for expression in info["expressions"]:
+                expr_name = expression.get("name") or "<unnamed>"
+                lines.append(f"    {expr_name}: {expression.get('file', '')}")
+        else:
+            lines.append("    none")
+        return "\n".join(lines)
+
+    def _update_live2d_browser_preview(self, info):
+        if self.live2d_preview_label is None:
+            return
+        self.live2d_preview_label.configure(text="Preview unavailable", image="")
+        self.live2d_preview_image = None
+        if info is None or Image is None or ImageTk is None:
+            return
+        for texture_path in info.get("texture_paths", []):
+            try:
+                if texture_path.exists():
+                    image = Image.open(texture_path)
+                    image.thumbnail((260, 260), Image.Resampling.LANCZOS)
+                    tk_image = ImageTk.PhotoImage(image)
+                    self.live2d_preview_label.configure(text="", image=tk_image)
+                    self.live2d_preview_image = tk_image
+                    return
+            except Exception:
+                continue
+
+    def _refresh_live2d_browser_content(self):
+        if self.live2d_listbox is None:
+            return
+        self.live2d_listbox.delete(0, tk.END)
+        for info in self.live2d_models:
+            label = info["name"]
+            if info.get("error"):
+                label += " [error]"
+            self.live2d_listbox.insert(tk.END, label)
+        if self.live2d_models:
+            self.live2d_listbox.selection_clear(0, tk.END)
+            self.live2d_listbox.selection_set(0)
+            self.live2d_listbox.activate(0)
+        self._update_live2d_browser_details()
+
+    def _update_live2d_browser_details(self, _event=None):
+        info = self._get_selected_live2d_model()
+        if self.live2d_details_text is not None:
+            self.live2d_details_text.configure(state="normal")
+            self.live2d_details_text.delete("1.0", tk.END)
+            self.live2d_details_text.insert("1.0", self._format_live2d_model_summary(info))
+            self.live2d_details_text.configure(state="disabled")
+        self._update_live2d_browser_preview(info)
+
+    def open_live2d_browser_window(self):
+        if self.live2d_source_dir is None or not self.live2d_source_dir.exists():
+            self.open_live2d_model_folder()
+            return
+        if self.live2d_browser_window is not None and self.live2d_browser_window.winfo_exists():
+            self.live2d_browser_window.deiconify()
+            self.live2d_browser_window.lift()
+            self._refresh_live2d_browser_content()
+            return
+
+        cfg = self.layout["live2d_browser_window"]
+        window = tk.Toplevel(self.root)
+        window.title("Live2D Browser")
+        window.transient(self.root)
+        window.resizable(False, False)
+        window.configure(bg="#111111")
+        window.geometry(f"{cfg['width']}x{cfg['height']}+{self.root.winfo_x() + cfg['offset_x']}+{self.root.winfo_y() + cfg['offset_y']}")
+        window.protocol("WM_DELETE_WINDOW", self._close_live2d_browser_window)
+
+        listbox = tk.Listbox(window, bg="#0b0b0b", fg="#f0f0f0", selectbackground="#143c3d", selectforeground="#56f4ee", font=("Cascadia Mono", 9), bd=1, relief="flat", highlightthickness=1, highlightbackground="#56f4ee", highlightcolor="#56f4ee")
+        listbox.place(x=cfg["list_x"], y=cfg["list_y"], width=cfg["list_width"], height=cfg["list_height"])
+        listbox.bind("<<ListboxSelect>>", self._update_live2d_browser_details)
+
+        details_text = tk.Text(window, bg="#0b0b0b", fg="#f0f0f0", insertbackground="#56f4ee", font=("Cascadia Mono", 9), bd=1, relief="flat", highlightthickness=1, highlightbackground="#56f4ee", highlightcolor="#56f4ee", wrap="word")
+        details_text.place(x=cfg["details_x"], y=cfg["details_y"], width=cfg["details_width"], height=cfg["details_height"])
+        details_text.configure(state="disabled")
+
+        preview_frame = tk.Frame(window, bg="#0b0b0b", bd=1, relief="flat", highlightthickness=1, highlightbackground="#56f4ee", highlightcolor="#56f4ee")
+        preview_frame.place(x=cfg["preview_x"], y=cfg["preview_y"], width=cfg["preview_width"], height=cfg["preview_height"])
+        preview_label = tk.Label(preview_frame, bg="#0b0b0b", fg="#8d9895", text="Preview unavailable")
+        preview_label.place(relx=0.5, rely=0.5, anchor="center")
+
+        self._create_composite_button(window, None, cfg["open_x"], cfg["actions_y"], "Open Folder", 110, 24, self.open_live2d_model_folder)
+        self._create_composite_button(window, None, cfg["export_x"], cfg["actions_y"], "Export", 90, 24, self.export_selected_live2d_package)
+        self._create_composite_button(window, None, cfg["refresh_x"], cfg["actions_y"], "Refresh", 90, 24, self._refresh_live2d_source_models)
+
+        self.live2d_browser_window = window
+        self.live2d_listbox = listbox
+        self.live2d_details_text = details_text
+        self.live2d_preview_label = preview_label
+        self.live2d_preview_image = None
+        self._refresh_live2d_browser_content()
+        window.lift()
+        window.focus_force()
+
+    def _close_live2d_browser_window(self):
+        if self.live2d_browser_window is not None and self.live2d_browser_window.winfo_exists():
+            self.live2d_browser_window.destroy()
+        self.live2d_browser_window = None
+        self.live2d_listbox = None
+        self.live2d_details_text = None
+        self.live2d_preview_label = None
+        self.live2d_preview_image = None
+
+    def _refresh_live2d_source_models(self):
+        if self.live2d_source_dir is None or not self.live2d_source_dir.exists():
+            return
+        self.live2d_models = self._scan_live2d_models(self.live2d_source_dir)
+        self._refresh_live2d_browser_content()
+
+    def export_selected_live2d_package(self):
+        info = self._get_selected_live2d_model()
+        if info is None:
+            self.open_live2d_browser_window()
+            info = self._get_selected_live2d_model()
+        if info is None:
+            messagebox.showwarning("Live2D Export", "Select a Live2D model first.", parent=self.root)
+            return
+        output_dir = filedialog.askdirectory(title="Select export folder", parent=self.live2d_browser_window or self.root, initialdir=str(info["root_dir"].parent))
+        if not output_dir:
+            return
+        base_name = self._slugify_project_id(info["name"]) or info["root_dir"].name
+        target_root = Path(output_dir) / base_name
+        candidate = target_root
+        suffix = 2
+        while candidate.exists():
+            candidate = Path(f"{target_root}_{suffix}")
+            suffix += 1
+        shutil.copytree(info["root_dir"], candidate)
+        messagebox.showinfo("Live2D Export", f"Package exported to:\n{candidate}", parent=self.live2d_browser_window or self.root)
+
+    def show_selected_live2d_model_info(self):
+        info = self._get_selected_live2d_model()
+        if info is None:
+            self.open_live2d_browser_window()
+            info = self._get_selected_live2d_model()
+        if info is None:
+            messagebox.showwarning("Live2D Info", "No Live2D model selected.", parent=self.root)
+            return
+        messagebox.showinfo("Live2D Model Info", self._format_live2d_model_summary(info), parent=self.live2d_browser_window or self.root)
 
     def _get_lmr_resources_path(self) -> Path | None:
         if self._detect_project_type() != "lmr" or self.project_dir is None:
@@ -6297,6 +6644,8 @@ class EditorApp:
         self.open_file(path)
 
     def open_file(self, path: Path):
+        if self.bad_apple_playing:
+            self.stop_bad_apple_ascii()
         if self.current_file is not None and self.editor_text is not None:
             self.file_buffers[self.current_file] = self._get_editor_content()
         try:
@@ -6323,6 +6672,8 @@ class EditorApp:
         self.open_file(path)
 
     def close_file_tab(self, path: Path):
+        if self.bad_apple_playing:
+            self.stop_bad_apple_ascii()
         if path not in self.open_files:
             return
         if self._is_file_dirty(path):
@@ -6356,6 +6707,8 @@ class EditorApp:
             self._request_render_file_tabs()
 
     def save_current_file(self):
+        if self.bad_apple_playing:
+            self.stop_bad_apple_ascii()
         content = self._get_editor_content()
         if self.current_file is None:
             if not content.strip():
@@ -6401,6 +6754,297 @@ class EditorApp:
         if not destination:
             return
         shutil.make_archive(str(Path(destination).with_suffix("")), "zip", root_dir=self.project_dir)
+
+    def _lzstring_decompress_from_base64(self, compressed: str):
+        if compressed is None:
+            return ""
+        if compressed == "":
+            return None
+        key_str_base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+        reverse_dict = {char: index for index, char in enumerate(key_str_base64)}
+        return self._lzstring_decompress(
+            len(compressed),
+            32,
+            lambda index: reverse_dict.get(compressed[index], 0),
+        )
+
+    def _lzstring_decompress(self, length: int, reset_value: int, get_next_value):
+        dictionary = {}
+        enlarge_in = 4
+        dict_size = 4
+        num_bits = 3
+        entry = ""
+        result = []
+        data = {"val": get_next_value(0), "position": reset_value, "index": 1}
+
+        def read_bits(bit_count: int):
+            bits = 0
+            maxpower = 1 << bit_count
+            power = 1
+            while power != maxpower:
+                resb = data["val"] & data["position"]
+                data["position"] >>= 1
+                if data["position"] == 0:
+                    data["position"] = reset_value
+                    if data["index"] < length:
+                        data["val"] = get_next_value(data["index"])
+                    else:
+                        data["val"] = 0
+                    data["index"] += 1
+                if resb > 0:
+                    bits |= power
+                power <<= 1
+            return bits
+
+        for i in range(3):
+            dictionary[i] = i
+
+        next_value = read_bits(2)
+        if next_value == 0:
+            c = chr(read_bits(8))
+        elif next_value == 1:
+            c = chr(read_bits(16))
+        elif next_value == 2:
+            return ""
+        else:
+            c = ""
+
+        dictionary[3] = c
+        w = c
+        result.append(c)
+
+        while True:
+            if data["index"] > length + 1:
+                return "".join(result)
+
+            c = read_bits(num_bits)
+
+            if c == 0:
+                dictionary[dict_size] = chr(read_bits(8))
+                c = dict_size
+                dict_size += 1
+                enlarge_in -= 1
+            elif c == 1:
+                dictionary[dict_size] = chr(read_bits(16))
+                c = dict_size
+                dict_size += 1
+                enlarge_in -= 1
+            elif c == 2:
+                return "".join(result)
+
+            if enlarge_in == 0:
+                enlarge_in = 1 << num_bits
+                num_bits += 1
+
+            if c in dictionary:
+                entry = dictionary[c]
+            elif c == dict_size:
+                entry = w + w[0]
+            else:
+                return ""
+
+            result.append(entry)
+            dictionary[dict_size] = w + entry[0]
+            dict_size += 1
+            enlarge_in -= 1
+            w = entry
+
+            if enlarge_in == 0:
+                enlarge_in = 1 << num_bits
+                num_bits += 1
+
+    def _load_bad_apple_frames(self):
+        if self.bad_apple_frames is not None:
+            return self.bad_apple_frames
+        if not BAD_APPLE_FRAMES_PATH.exists():
+            raise FileNotFoundError(f"framesData.lz not found:\n{BAD_APPLE_FRAMES_PATH}")
+        compressed = BAD_APPLE_FRAMES_PATH.read_text(encoding="utf-8").strip()
+        decompressed = self._lzstring_decompress_from_base64(compressed)
+        if not decompressed:
+            raise RuntimeError("Failed to decompress Bad Apple frames.")
+        payload = json.loads(decompressed)
+        self.bad_apple_frames = [str(frame).replace("\\n", "\n") for frame in payload]
+        return self.bad_apple_frames
+
+    def _close_bad_apple_audio(self):
+        process = self.bad_apple_audio_process
+        self.bad_apple_audio_process = None
+        self.bad_apple_audio_delay_ms = 0
+        if process is not None:
+            try:
+                process.terminate()
+            except Exception:
+                pass
+            try:
+                process.wait(timeout=0.5)
+            except Exception:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+        alias = self.bad_apple_audio_alias
+        if not alias:
+            return
+        try:
+            self._mci_send_string(f"stop {alias}")
+        except Exception:
+            pass
+        try:
+            self._mci_send_string(f"close {alias}")
+        except Exception:
+            pass
+        self.bad_apple_audio_alias = ""
+
+    def _play_bad_apple_audio_fallback(self):
+        ps_exe = shutil.which("powershell")
+        if not ps_exe or not BAD_APPLE_AUDIO_PATH.exists():
+            return False
+        script = (
+            "Add-Type -AssemblyName presentationCore; "
+            "$p = New-Object System.Windows.Media.MediaPlayer; "
+            f"$p.Open([Uri]'{BAD_APPLE_AUDIO_PATH.as_posix()}'); "
+            "$p.Volume = 1.0; "
+            "$p.Play(); "
+            "while ($true) { "
+            "Start-Sleep -Milliseconds 200; "
+            "if ($p.Source -eq $null) { break }; "
+            "if ($p.NaturalDuration.HasTimeSpan -and $p.Position -ge $p.NaturalDuration.TimeSpan) { break } "
+            "}"
+        )
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            self.bad_apple_audio_process = subprocess.Popen(
+                [ps_exe, "-NoProfile", "-WindowStyle", "Hidden", "-Command", script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creation_flags,
+            )
+            self.bad_apple_audio_delay_ms = 320
+            return True
+        except Exception:
+            self.bad_apple_audio_process = None
+            self.bad_apple_audio_delay_ms = 0
+            return False
+
+    def _play_bad_apple_audio(self):
+        self._close_bad_apple_audio()
+        if not BAD_APPLE_AUDIO_PATH.exists():
+            return False
+        alias = f"sgm_bad_apple_{id(self)}"
+        commands = [
+            f'open "{BAD_APPLE_AUDIO_PATH}" type mpegvideo alias {alias}',
+            f'open "{BAD_APPLE_AUDIO_PATH}" alias {alias}',
+        ]
+        opened = False
+        for command in commands:
+            try:
+                if self._mci_send_string(command) == 0:
+                    opened = True
+                    break
+            except Exception:
+                pass
+        if not opened:
+            return self._play_bad_apple_audio_fallback()
+        self.bad_apple_audio_alias = alias
+        self.bad_apple_audio_delay_ms = 0
+        try:
+            self._mci_send_string(f"set {alias} time format milliseconds")
+        except Exception:
+            pass
+        try:
+            self._mci_send_string(f"play {alias}")
+        except Exception:
+            self._close_bad_apple_audio()
+            return self._play_bad_apple_audio_fallback()
+        return True
+
+    def _render_bad_apple_frame(self, frame_text: str):
+        if self.editor_text is None:
+            return
+        self.editor_text.configure(state="normal")
+        self.editor_text.delete("1.0", "end")
+        self.editor_text.insert("1.0", frame_text)
+        self.editor_text.configure(state="disabled")
+        self._refresh_line_numbers(force=True)
+        self._update_status(refresh_lines=False)
+
+    def _schedule_bad_apple_next_frame(self):
+        if not self.bad_apple_playing:
+            return
+        frames = self.bad_apple_frames or []
+        if not frames:
+            self.stop_bad_apple_ascii()
+            return
+        elapsed = time.perf_counter() - self.bad_apple_started_at
+        if elapsed < 0:
+            self._render_bad_apple_frame(frames[0])
+            self.bad_apple_job = self.root.after(max(1, int(abs(elapsed) * 1000)), self._schedule_bad_apple_next_frame)
+            return
+        frame_index = int(elapsed * BAD_APPLE_FPS)
+        if frame_index >= len(frames):
+            self.stop_bad_apple_ascii()
+            return
+        self._render_bad_apple_frame(frames[frame_index])
+        next_frame_time = (frame_index + 1) / BAD_APPLE_FPS
+        delay_ms = max(1, int((next_frame_time - elapsed) * 1000))
+        self.bad_apple_job = self.root.after(delay_ms, self._schedule_bad_apple_next_frame)
+
+    def play_bad_apple_ascii(self):
+        if self.editor_text is None:
+            return
+        if self.bad_apple_playing:
+            return
+        try:
+            frames = self._load_bad_apple_frames()
+        except Exception as error:
+            messagebox.showwarning("Bad Apple ASCII", str(error), parent=self.root)
+            return
+        self.bad_apple_saved_state = {
+            "content": self._get_editor_content(),
+            "insert": self.editor_text.index("insert"),
+            "xview": self.editor_text.xview(),
+            "yview": self.editor_text.yview(),
+            "state": str(self.editor_text.cget("state")),
+        }
+        self.bad_apple_playing = True
+        self.bad_apple_frames = frames
+        self._play_bad_apple_audio()
+        self.bad_apple_started_at = time.perf_counter() + (self.bad_apple_audio_delay_ms / 1000.0)
+        self._schedule_bad_apple_next_frame()
+
+    def stop_bad_apple_ascii(self, restore: bool = True):
+        self._close_bad_apple_audio()
+        if self.bad_apple_job is not None:
+            try:
+                self.root.after_cancel(self.bad_apple_job)
+            except tk.TclError:
+                pass
+            self.bad_apple_job = None
+        was_playing = self.bad_apple_playing
+        self.bad_apple_playing = False
+        if self.editor_text is None:
+            self.bad_apple_saved_state = None
+            return
+        self.editor_text.configure(state="normal")
+        if restore and self.bad_apple_saved_state is not None:
+            state = self.bad_apple_saved_state
+            self._set_editor_content(state["content"])
+            try:
+                self.editor_text.mark_set("insert", state["insert"])
+                xview = state.get("xview") or (0.0, 1.0)
+                yview = state.get("yview") or (0.0, 1.0)
+                self.editor_text.xview_moveto(float(xview[0]))
+                self.editor_text.yview_moveto(float(yview[0]))
+                self.editor_text.see(state["insert"])
+            except (tk.TclError, TypeError, ValueError):
+                pass
+            if state.get("state") == "disabled":
+                self.editor_text.configure(state="disabled")
+            self._refresh_line_numbers(force=True)
+            self._update_status(refresh_lines=False)
+        self.bad_apple_saved_state = None
+        if was_playing:
+            self._focus_editor_widget()
 
     def _refresh_line_numbers(self, force=False):
         if self.editor_text is None or self.line_numbers is None:
@@ -6481,6 +7125,7 @@ class EditorApp:
         self.root.after(15000, self._presence_loop)
 
     def on_close(self):
+        self.stop_bad_apple_ascii(restore=False)
         unsaved_files = [path for path in self.open_files if self._is_file_dirty(path)]
         if unsaved_files:
             if len(unsaved_files) == 1:
