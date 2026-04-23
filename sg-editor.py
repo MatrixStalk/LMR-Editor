@@ -895,6 +895,9 @@ class EditorApp:
         self.root.geometry(self._center_geometry())
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.bind("<Map>", self._handle_window_map)
+        self.root.bind("<FocusIn>", self._handle_root_window_activity, add="+")
+        self.root.bind("<Configure>", self._handle_root_window_activity, add="+")
+        self.root.bind("<ButtonPress-1>", self._handle_root_window_activity, add="+")
 
         self.project_dir: Path | None = None
         self.current_file: Path | None = None
@@ -936,6 +939,9 @@ class EditorApp:
         self.top_menu_item_ids = []
         self.tree_item_paths: dict[str, Path] = {}
         self.settings_window = None
+        self.internal_windows = []
+        self._internal_window_sync_job = None
+        self._internal_window_focus_target = None
         self.confirm_window = None
         self.asset_viewer_window = None
         self.asset_viewer_tree = None
@@ -2206,16 +2212,12 @@ class EditorApp:
 
         window = tk.Toplevel(parent_window)
         self.confirm_window = window
-        window.transient(parent_window)
+        self._register_internal_window(window, parent_window)
         window.resizable(False, False)
         window.configure(bg=TRANSPARENT_COLOR)
         window.overrideredirect(True)
         try:
             window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
-        except tk.TclError:
-            pass
-        try:
-            window.wm_attributes("-topmost", True)
         except tk.TclError:
             pass
         window.geometry(
@@ -2376,10 +2378,7 @@ class EditorApp:
                 self.settings_window.deiconify()
             except tk.TclError:
                 pass
-            try:
-                self.settings_window.wm_attributes("-topmost", True)
-            except tk.TclError:
-                pass
+            self._register_internal_window(self.settings_window, self.root)
             self.settings_window.lift()
             self.settings_window.focus_force()
             return
@@ -2390,7 +2389,7 @@ class EditorApp:
 
         self.settings_window = tk.Toplevel(self.root)
         self.settings_window.title("Settings")
-        self.settings_window.transient(self.root)
+        self._register_internal_window(self.settings_window, self.root)
         self.settings_window.resizable(False, False)
         self.settings_window.configure(bg=TRANSPARENT_COLOR)
         self.settings_window.overrideredirect(True)
@@ -2407,10 +2406,6 @@ class EditorApp:
         self.settings_window.bind("<Escape>", lambda _e: self.close_settings_window())
         self.settings_window.deiconify()
         self.settings_window.lift()
-        try:
-            self.settings_window.wm_attributes("-topmost", True)
-        except tk.TclError:
-            pass
         self.settings_window.grab_set()
         self.settings_window.focus_force()
 
@@ -2679,15 +2674,10 @@ class EditorApp:
 
         def browse():
             try:
-                self.settings_window.wm_attributes("-topmost", False)
-            except tk.TclError:
-                pass
-            try:
                 folder = filedialog.askdirectory(title=browse_title, parent=self.settings_window, initialdir=variable.get() or str(BASE_DIR))
             finally:
+                self._schedule_internal_window_sync(self.settings_window)
                 try:
-                    self.settings_window.wm_attributes("-topmost", True)
-                    self.settings_window.lift()
                     self.settings_window.focus_force()
                 except tk.TclError:
                     pass
@@ -3161,6 +3151,58 @@ class EditorApp:
 
     def _handle_window_map(self, _event=None):
         self.root.after(10, self._restore_borderless)
+        self._schedule_internal_window_sync()
+
+    def _handle_root_window_activity(self, _event=None):
+        self._schedule_internal_window_sync()
+
+    def _is_window_alive(self, window) -> bool:
+        return window is not None and bool(window.winfo_exists())
+
+    def _prune_internal_windows(self):
+        self.internal_windows = [window for window in self.internal_windows if self._is_window_alive(window)]
+
+    def _unregister_internal_window(self, window):
+        self.internal_windows = [item for item in self.internal_windows if item is not window and self._is_window_alive(item)]
+        if self._internal_window_focus_target is window:
+            self._internal_window_focus_target = None
+
+    def _register_internal_window(self, window, parent_window=None):
+        owner = parent_window if self._is_window_alive(parent_window) else self.root
+        try:
+            window.transient(owner)
+        except tk.TclError:
+            pass
+        self._prune_internal_windows()
+        self.internal_windows = [item for item in self.internal_windows if item is not window]
+        self.internal_windows.append(window)
+        window.bind("<Destroy>", lambda _e, w=window: self._unregister_internal_window(w), add="+")
+        window.bind("<FocusIn>", lambda _e, w=window: self._schedule_internal_window_sync(w), add="+")
+        self._schedule_internal_window_sync(window)
+
+    def _schedule_internal_window_sync(self, preferred_window=None):
+        if preferred_window is not None and self._is_window_alive(preferred_window):
+            self._internal_window_focus_target = preferred_window
+        if self._internal_window_sync_job is not None:
+            return
+        try:
+            self._internal_window_sync_job = self.root.after_idle(self._sync_internal_window_stack)
+        except tk.TclError:
+            self._internal_window_sync_job = None
+
+    def _sync_internal_window_stack(self):
+        self._internal_window_sync_job = None
+        self._prune_internal_windows()
+        preferred_window = self._internal_window_focus_target
+        self._internal_window_focus_target = None
+        if preferred_window is not None and preferred_window in self.internal_windows:
+            self.internal_windows = [item for item in self.internal_windows if item is not preferred_window]
+            self.internal_windows.append(preferred_window)
+        for window in self.internal_windows:
+            try:
+                window.lift()
+            except tk.TclError:
+                pass
 
     def _set_project_dir(self, path: Path):
         self.project_dir = path
@@ -3683,7 +3725,7 @@ class EditorApp:
         width = 1120
         height = 720
         window = tk.Toplevel(self.root)
-        window.transient(self.root)
+        self._register_internal_window(window, self.root)
         window.configure(bg=TRANSPARENT_COLOR)
         window.overrideredirect(True)
         try:
@@ -3937,7 +3979,7 @@ class EditorApp:
             return
 
         progress_window = tk.Toplevel(self.root)
-        progress_window.transient(self.root)
+        self._register_internal_window(progress_window, self.root)
         progress_window.title("LMR Bundle Extractor")
         progress_window.resizable(False, False)
         progress_window.geometry(f"420x120+{self.root.winfo_x() + 180}+{self.root.winfo_y() + 140}")
@@ -4161,7 +4203,7 @@ class EditorApp:
         cfg = self.layout["live2d_browser_window"]
         window = tk.Toplevel(self.root)
         window.title("Live2D Browser")
-        window.transient(self.root)
+        self._register_internal_window(window, self.root)
         window.resizable(False, False)
         window.configure(bg="#111111")
         window.geometry(f"{cfg['width']}x{cfg['height']}+{self.root.winfo_x() + cfg['offset_x']}+{self.root.winfo_y() + cfg['offset_y']}")
@@ -4681,13 +4723,9 @@ class EditorApp:
         if not values:
             return
         popup = tk.Toplevel(window)
-        popup.transient(window)
+        self._register_internal_window(popup, window)
         popup.overrideredirect(True)
         popup.configure(bg=self._theme_color("#111111"))
-        try:
-            popup.wm_attributes("-topmost", True)
-        except tk.TclError:
-            pass
         row_height = 24
         visible_values = list(values)
         popup_width = max(shell.winfo_width(), 160)
@@ -4859,9 +4897,9 @@ class EditorApp:
                 window.deiconify()
                 window.lift()
                 window.focus_force()
-                window.wm_attributes("-topmost", True)
             except tk.TclError:
                 pass
+            self._schedule_internal_window_sync(window)
             self._refresh_lmr_dialog_widgets(window)
         window.after(250, lambda w=window: self._watch_lmr_dialog_layout(w))
 
@@ -4870,13 +4908,9 @@ class EditorApp:
         width = int(width if width is not None else cfg["width"])
         height = int(height if height is not None else cfg["height"])
         window = tk.Toplevel(self.root)
-        window.transient(self.root)
+        self._register_internal_window(window, self.root)
         window.configure(bg=self._theme_color("#111111"))
         window.overrideredirect(True)
-        try:
-            window.wm_attributes("-topmost", True)
-        except tk.TclError:
-            pass
         window.geometry(f"{width}x{height}+{self.root.winfo_x() + cfg['offset_x']}+{self.root.winfo_y() + cfg['offset_y']}")
         window.resizable(False, False)
 
@@ -5837,16 +5871,12 @@ class EditorApp:
         width = cfg["width"]
         height = cfg["height_lmr"] if project_type == "lmr" else cfg["height_es"]
         window = tk.Toplevel(self.root)
-        window.transient(self.root)
+        self._register_internal_window(window, self.root)
         window.resizable(False, False)
         window.configure(bg=TRANSPARENT_COLOR)
         window.overrideredirect(True)
         try:
             window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
-        except tk.TclError:
-            pass
-        try:
-            window.wm_attributes("-topmost", True)
         except tk.TclError:
             pass
         window.geometry(
@@ -6101,16 +6131,12 @@ class EditorApp:
         width = cfg["width"]
         height = cfg["height"]
         window = tk.Toplevel(self.root)
-        window.transient(self.root)
+        self._register_internal_window(window, self.root)
         window.resizable(False, False)
         window.configure(bg=TRANSPARENT_COLOR)
         window.overrideredirect(True)
         try:
             window.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
-        except tk.TclError:
-            pass
-        try:
-            window.wm_attributes("-topmost", True)
         except tk.TclError:
             pass
         window.geometry(
@@ -6123,16 +6149,9 @@ class EditorApp:
 
         def run_project_dialog(callback):
             try:
-                window.wm_attributes("-topmost", False)
-            except tk.TclError:
-                pass
-            try:
                 return callback()
             finally:
-                try:
-                    window.wm_attributes("-topmost", True)
-                except tk.TclError:
-                    pass
+                self._schedule_internal_window_sync(window)
                 try:
                     window.lift()
                     window.focus_force()
