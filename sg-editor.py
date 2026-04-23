@@ -1381,8 +1381,10 @@ class EditorApp:
         self._configure_tree_style()
         self.canvas = tk.Canvas(self.root, width=width, height=height, bg=TRANSPARENT_COLOR, highlightthickness=0, bd=0)
         self.canvas.pack()
-        if "mb_bg.png" in self.assets:
-            self.canvas.create_image(0, 0, image=self.assets["mb_bg.png"], anchor="nw")
+        background = self._load_asset_exact("mb_bg.png", width, height)
+        if background is not None:
+            self.canvas.create_image(0, 0, image=background, anchor="nw")
+            self.canvas._main_background_image = background
 
         self.canvas.bind("<ButtonPress-1>", self._start_drag)
         self.canvas.bind("<B1-Motion>", self._drag_window)
@@ -2310,26 +2312,33 @@ class EditorApp:
             window_item = parent_canvas.create_window(x, y, anchor="nw", window=widget, width=total_width, height=height)
         return widget, window_item
 
-    def _draw_window_frame(self, canvas, width, height):
-        edge = 22
-        background = self._load_asset_exact("window_back.png", max(1, width - edge * 2), max(1, height - edge * 2))
-        if background is not None:
-            canvas.create_image(edge, edge, image=background, anchor="nw")
-            if not hasattr(canvas, "_frame_images"):
-                canvas._frame_images = []  
-            canvas._frame_images.append(background)  
+    def _draw_nine_slice_frame(self, canvas, width, height, asset_prefix: str, edge: int = 22, fallback_fill: str = "#101010", draw_background: bool = True):
+        edge = max(1, int(edge))
+        width = max(edge * 2 + 1, int(width))
+        height = max(edge * 2 + 1, int(height))
+        background_name = f"{asset_prefix}_back.png"
+        if hasattr(canvas, "_frame_images"):
+            canvas._frame_images.clear()
         else:
-            canvas.create_rectangle(edge, edge, width - edge, height - edge, fill="#101010", outline="")
+            canvas._frame_images = []
+
+        if draw_background:
+            background = self._load_asset_exact(background_name, max(1, width - edge * 2), max(1, height - edge * 2))
+            if background is not None:
+                canvas.create_image(edge, edge, image=background, anchor="nw")
+                canvas._frame_images.append(background)
+            else:
+                canvas.create_rectangle(edge, edge, width - edge, height - edge, fill=fallback_fill, outline="")
 
         pieces = [
-            ("window_lt.png", 0, 0, edge, edge),
-            ("window_rt.png", width - edge, 0, edge, edge),
-            ("window_lb.png", 0, height - edge, edge, edge),
-            ("window_rb.png", width - edge, height - edge, edge, edge),
-            ("window_t.png", edge, 0, max(1, width - edge * 2), edge),
-            ("window_b.png", edge, height - edge, max(1, width - edge * 2), edge),
-            ("window_l.png", 0, edge, edge, max(1, height - edge * 2)),
-            ("window_r.png", width - edge, edge, edge, max(1, height - edge * 2)),
+            (f"{asset_prefix}_lt.png", 0, 0, edge, edge),
+            (f"{asset_prefix}_rt.png", width - edge, 0, edge, edge),
+            (f"{asset_prefix}_lb.png", 0, height - edge, edge, edge),
+            (f"{asset_prefix}_rb.png", width - edge, height - edge, edge, edge),
+            (f"{asset_prefix}_t.png", edge, 0, max(1, width - edge * 2), edge),
+            (f"{asset_prefix}_b.png", edge, height - edge, max(1, width - edge * 2), edge),
+            (f"{asset_prefix}_l.png", 0, edge, edge, max(1, height - edge * 2)),
+            (f"{asset_prefix}_r.png", width - edge, edge, edge, max(1, height - edge * 2)),
         ]
 
         for name, x, y, w, h in pieces:
@@ -2337,9 +2346,10 @@ class EditorApp:
             if image is None:
                 continue
             canvas.create_image(x, y, image=image, anchor="nw")
-            if not hasattr(canvas, "_frame_images"):
-                canvas._frame_images = []  
-            canvas._frame_images.append(image)  
+            canvas._frame_images.append(image)
+
+    def _draw_window_frame(self, canvas, width, height):
+        self._draw_nine_slice_frame(canvas, width, height, "window", edge=22, fallback_fill="#101010")
 
     def _show_unsaved_warning(self, title: str, message: str) -> bool:
         if self.confirm_window is not None and self.confirm_window.winfo_exists():
