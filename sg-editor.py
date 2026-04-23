@@ -32,6 +32,22 @@ import base64
 # - Ещё не придумал
 
 
+def _register_embedded_vendor():
+    script_dir = Path(__file__).resolve().parent
+    runtime_dir = Path(getattr(sys, "_MEIPASS", script_dir))
+    vendor_dirs = [runtime_dir / "_vendor"]
+    if script_dir != runtime_dir:
+        vendor_dirs.append(script_dir / "_vendor")
+    for vendor_dir in vendor_dirs:
+        if vendor_dir.exists():
+            vendor_path = str(vendor_dir)
+            if vendor_path not in sys.path:
+                sys.path.insert(0, vendor_path)
+
+
+_register_embedded_vendor()
+
+
 try:
     from PIL import Image, ImageTk
 except ImportError:
