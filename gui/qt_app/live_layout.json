@@ -1,0 +1,28 @@
+{
+  "window": {
+    "width": 1280,
+    "height": 760,
+    "min_width": 760,
+    "min_height": 460,
+    "outer_radius": 30,
+    "resize_margin": 10
+  },
+  "layers": {
+    "root_margins": [14, 14, 14, 14],
+    "backdrop_margins": [8, 8, 8, 8],
+    "shell_margins": [2, 10, 18, 14]
+  },
+  "chrome": {
+    "height": 90,
+    "margins": [28, 14, 18, 8],
+    "spacing": 16,
+    "title_spacing": 1,
+    "logo_size": 70
+  },
+  "effects": {
+    "shell_glow_blur": 20,
+    "shell_glow_alpha": 255,
+    "backdrop_blur_blur": 34,
+    "backdrop_blur_alpha": 210
+  }
+}

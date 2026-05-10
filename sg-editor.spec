@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+from PyInstaller.utils.hooks import collect_data_files
 
 
 project_dir = Path(SPECPATH)
@@ -29,6 +30,7 @@ datas += collect_dir("assets")
 datas += collect_dir("discordrpc")
 datas += collect_dir("bad_apple")
 datas += collect_dir("_vendor")
+datas += collect_data_files("archspec", includes=["json/**/*"])
 
 for extra_name in ("editor_layout.json", "app_settings.json", "README.md", "icon.ico"):
     extra_path = project_dir / extra_name
@@ -41,7 +43,7 @@ a = Analysis(
     pathex=[str(project_dir), str(vendor_dir)],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=["archspec", "archspec.cpu"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

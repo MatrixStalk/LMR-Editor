@@ -1,0 +1,65 @@
+* {
+    font-family: "Cascadia Mono", "JetBrains Mono", "Consolas";
+    color: #d9e8ff;
+}
+
+QWidget#Root {
+    background: transparent;
+}
+
+QFrame#Backdrop {
+    background: #000000;
+    border-radius: 24px;
+}
+
+QFrame#Shell {
+    background: rgba(300, 7, 23, 0.58);
+    border: 1px solid rgba(78, 152, 255, 0.85);
+    border-radius: 20px;
+}
+
+QFrame#Chrome {
+    background: transparent;
+}
+
+QLabel#AppTitle {
+    color: #8fb8ff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 11px;
+}
+
+QLabel#AppSubtitle {
+    color: #78a4e8;
+    font-size: 0px;
+}
+
+QPushButton {
+    background: rgba(10, 31, 74, 0.78);
+    border: 1px solid rgba(78, 152, 255, 0.78);
+    border-radius: 7px;
+    padding: 7px 12px;
+    color: #8fb8ff;
+}
+
+QPushButton:hover {
+    background: rgba(22, 67, 152, 0.82);
+    border-color: #23d9ff;
+    color: white;
+}
+
+QPushButton:pressed {
+    background: rgba(4, 15, 40, 0.95);
+    color: #23d9ff;
+}
+
+QPushButton#WindowButton {
+    border: none;
+    background: transparent;
+    font-size: 20px;
+    padding: 2px 8px;
+}
+
+QPushButton#WindowButton:hover {
+    background: rgba(78, 152, 255, 0.18);
+}
